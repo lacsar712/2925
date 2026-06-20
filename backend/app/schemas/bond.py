@@ -37,3 +37,33 @@ class BondFilter(BaseModel):
     keyword: Optional[str] = None
     page: int = 1
     page_size: int = 20
+
+
+class BondCalcRequest(BaseModel):
+    face_value: float
+    coupon_rate: float
+    payment_frequency: int
+    settlement_date: date
+    maturity_date: date
+    clean_price: Optional[float] = None
+    yield_rate: Optional[float] = None
+
+    model_config = {"from_attributes": True}
+
+
+class BondCalcResponse(BaseModel):
+    face_value: float
+    coupon_rate: float
+    payment_frequency: int
+    settlement_date: date
+    maturity_date: date
+    clean_price: float
+    yield_rate: float
+    accrued_interest: float
+    dirty_price: float
+    macaulay_duration: float
+    modified_duration: float
+    years_to_maturity: float
+    cash_flows: list[dict]
+
+    model_config = {"from_attributes": True}

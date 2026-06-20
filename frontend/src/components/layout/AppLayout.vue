@@ -59,6 +59,19 @@
           债券对比
         </a-menu-item>
 
+        <a-sub-menu key="tools">
+          <template #icon>
+            <ToolOutlined />
+          </template>
+          <template #title>工具</template>
+          <a-menu-item key="/tools/bond-calculator">
+            <template #icon>
+              <CalculatorOutlined />
+            </template>
+            债券计算器
+          </a-menu-item>
+        </a-sub-menu>
+
         <a-sub-menu key="watchlist-groups">
           <template #icon>
             <FolderOutlined />
@@ -223,6 +236,8 @@ import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
+  ToolOutlined,
+  CalculatorOutlined,
 } from '@ant-design/icons-vue'
 import { useAuthStore } from '../../stores/auth'
 import { useWatchlistStore } from '../../stores/watchlist'
@@ -247,10 +262,13 @@ watch(
   (path) => {
     if (path.startsWith('/watchlist/')) {
       selectedKeys.value = [path, 'watchlist-groups']
+    } else if (path.startsWith('/tools/')) {
+      selectedKeys.value = [path, 'tools']
+    } else if (path.startsWith('/alerts/')) {
+      selectedKeys.value = [path, 'alerts']
+    } else if (path.startsWith('/admin/')) {
+      selectedKeys.value = [path, 'admin']
     } else {
-      selectedKeys.value = [path]
-    }
-    if (path.startsWith('/admin/')) {
       selectedKeys.value = [path]
     }
   },
