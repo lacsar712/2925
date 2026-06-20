@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: #f0f2f5;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-family: 'JetBrains Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+}
+
+.price-up {
+  color: #ff4d4f;
+  animation: flash-red 0.6s ease-out;
+}
+
+.price-down {
+  color: #52c41a;
+  animation: flash-green 0.6s ease-out;
+}
+
+@keyframes flash-red {
+  0% { background-color: rgba(255, 77, 79, 0.3); }
+  100% { background-color: transparent; }
+}
+
+@keyframes flash-green {
+  0% { background-color: rgba(82, 196, 26, 0.3); }
+  100% { background-color: transparent; }
+}
+
+.ant-layout-sider {
+  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%) !important;
+}
+
+.ant-menu-dark {
+  background: transparent !important;
+}
+
+/* 统计卡片字体缩小，更紧凑 */
+.ant-statistic .ant-statistic-title {
+  font-size: 12px !important;
+  margin-bottom: 2px !important;
+}
+
+.ant-statistic .ant-statistic-content {
+  font-size: 20px !important;
+}
+
+.ant-statistic .ant-statistic-content-prefix {
+  font-size: 16px !important;
+  margin-inline-end: 4px !important;
+}
+
+/* Dashboard 统计卡片内边距更紧凑 */
+.dashboard .ant-card-body {
+  padding: 12px 16px !important;
+}
+
+/* 所有 Ant Design 表格在窄屏下启用横向滚动，防止内容被裁切 */
+.ant-table-wrapper {
+  overflow-x: auto;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f0f0f0;
+}

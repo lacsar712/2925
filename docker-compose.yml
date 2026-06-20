@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: bondview-db
+    environment:
+      POSTGRES_DB: bondview
+      POSTGRES_USER: bondview
+      POSTGRES_PASSWORD: bondview123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bondview"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - bondview-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: bondview-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - bondview-net
+
+  backend:
+    build: ./backend
+    container_name: bondview-backend
+    ports:
+      - "8000:8000"
+    environment:
+      BONDVIEW_DATABASE_URL: postgresql+asyncpg://bondview:bondview123@db:5432/bondview
+      BONDVIEW_REDIS_URL: redis://redis:6379/0
+      BONDVIEW_DEBUG: "false"
+      BONDVIEW_SECRET_KEY: "bondview-dev-secret-key-2024"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bondview-net
+
+  frontend:
+    build: ./frontend
+    container_name: bondview-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - bondview-net
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  bondview-net:
+    driver: bridge
