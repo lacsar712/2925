@@ -52,6 +52,14 @@
           </template>
           我的关注
         </a-menu-item>
+        <a-sub-menu key="alerts">
+          <template #icon>
+            <BellOutlined />
+          </template>
+          <template #title>价格预警</template>
+          <a-menu-item key="/alerts/rules">预警规则</a-menu-item>
+          <a-menu-item key="/alerts/history">触发历史</a-menu-item>
+        </a-sub-menu>
         <a-sub-menu v-if="authStore.isAdmin()" key="admin">
           <template #icon>
             <SettingOutlined />
@@ -66,6 +74,7 @@
       <a-layout-header class="app-header flex items-center justify-between px-6 bg-white border-b border-gray-200">
         <div class="flex-1" />
         <div class="flex items-center gap-4">
+          <AlertBell />
           <span class="text-gray-600">{{ authStore.user?.display_name || authStore.user?.username }}</span>
           <a-tag :color="roleColor">{{ roleLabel }}</a-tag>
           <a-button type="text" danger size="small" @click="handleLogout">
@@ -90,9 +99,11 @@ import {
   FundOutlined,
   TransactionOutlined,
   StarOutlined,
+  BellOutlined,
   SettingOutlined,
 } from '@ant-design/icons-vue'
 import { useAuthStore } from '../../stores/auth'
+import AlertBell from './AlertBell.vue'
 
 const router = useRouter()
 const route = useRoute()

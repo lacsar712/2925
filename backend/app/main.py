@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,7 +9,8 @@ import sys
 from app.config import settings
 from app.database import init_db, async_session
 from app.seed.seed_data import seed_all
-from app.api import auth, bonds, quotes, trades, futures, swaps, dashboard, favorites, admin
+from app.api import auth, bonds, quotes, trades, futures, swaps, dashboard, favorites, admin, alerts
+from app.services.alert_service import alert_monitor_loop
 
 logger.remove()
 logger.add(sys.stderr, format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}", level="INFO")
@@ -23,8 +25,16 @@ async def lifespan(app: FastAPI):
     async with async_session() as session:
         await seed_all(session)
 
+    alert_task = asyncio.create_task(alert_monitor_loop(interval_seconds=10))
+    logger.info("预警检测后台服务已启动")
+
     logger.info("系统启动完成")
     yield
+    alert_task.cancel()
+    try:
+        await alert_task
+    except asyncio.CancelledError:
+        logger.info("预警检测后台服务已停止")
     logger.info("系统关闭")
 
 
@@ -52,6 +62,7 @@ app.include_router(swaps.router)
 app.include_router(dashboard.router)
 app.include_router(favorites.router)
 app.include_router(admin.router)
+app.include_router(alerts.router)
 
 
 @app.get("/api/health")
