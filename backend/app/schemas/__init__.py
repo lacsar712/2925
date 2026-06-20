@@ -11,6 +11,7 @@ from app.schemas.watchlist import (
     WatchlistGroupBondWithData,
     WatchlistGroupDetailOut,
 )
+from app.schemas.audit import AuditLogOut, AuditLogListResponse, AuditActionType, AUDIT_ACTION_TYPES
 
 __all__ = [
     "BondOut", "BondListOut", "BondFilter",
@@ -20,4 +21,5 @@ __all__ = [
     "WatchlistGroupCreate", "WatchlistGroupUpdate", "WatchlistGroupOut",
     "WatchlistGroupBondOut", "WatchlistBondReorder",
     "WatchlistGroupBondWithData", "WatchlistGroupDetailOut",
+    "AuditLogOut", "AuditLogListResponse", "AuditActionType", "AUDIT_ACTION_TYPES",
 ]

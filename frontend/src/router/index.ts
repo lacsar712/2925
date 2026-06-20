@@ -29,6 +29,7 @@ const router = createRouter({
         { path: 'compare', name: 'BondCompare', component: () => import('../views/BondCompareView.vue') },
         { path: 'admin/users', name: 'AdminUsers', component: () => import('../views/admin/UserManagement.vue') },
         { path: 'admin/sources', name: 'AdminSources', component: () => import('../views/admin/SourceManagement.vue') },
+        { path: 'admin/audit-logs', name: 'AdminAuditLogs', component: () => import('../views/admin/AuditLogView.vue') },
       ],
     },
   ],

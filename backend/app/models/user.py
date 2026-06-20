@@ -27,6 +27,10 @@ class User(Base):
         "WatchlistGroup", back_populates="user", cascade="all, delete-orphan"
     )
 
+    audit_logs: Mapped[list["AuditLog"]] = relationship(
+        "AuditLog", back_populates="user"
+    )
+
 
 class UserFavorite(Base):
     __tablename__ = "user_favorites"

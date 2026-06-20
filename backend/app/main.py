@@ -13,6 +13,7 @@ from app.api import auth, bonds, quotes, trades, futures, swaps, dashboard, favo
 from app.services.alert_service import alert_monitor_loop
 from app.services.websocket_service import quote_broadcast_loop
 from app.services.cache_service import CacheService
+from app.models import *
 
 logger.remove()
 logger.add(sys.stderr, format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}", level="INFO")

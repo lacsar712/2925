@@ -148,6 +148,7 @@
           <template #title>系统管理</template>
           <a-menu-item key="/admin/users">用户管理</a-menu-item>
           <a-menu-item key="/admin/sources">行情源管理</a-menu-item>
+          <a-menu-item key="/admin/audit-logs">操作审计</a-menu-item>
         </a-sub-menu>
       </a-menu>
     </a-layout-sider>
