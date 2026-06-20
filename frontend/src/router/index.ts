@@ -23,6 +23,7 @@ const router = createRouter({
         { path: 'futures', name: 'Futures', component: () => import('../views/FuturesView.vue') },
         { path: 'swaps', name: 'Swaps', component: () => import('../views/SwapsView.vue') },
         { path: 'favorites', name: 'Favorites', component: () => import('../views/FavoritesView.vue') },
+        { path: 'watchlist/:groupId', name: 'WatchlistGroup', component: () => import('../views/WatchlistGroupView.vue') },
         { path: 'alerts/rules', name: 'AlertRules', component: () => import('../views/AlertRulesView.vue') },
         { path: 'alerts/history', name: 'AlertHistory', component: () => import('../views/AlertHistoryView.vue') },
         { path: 'compare', name: 'BondCompare', component: () => import('../views/BondCompareView.vue') },

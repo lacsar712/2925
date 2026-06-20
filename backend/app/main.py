@@ -9,7 +9,7 @@ import sys
 from app.config import settings
 from app.database import init_db, async_session
 from app.seed.seed_data import seed_all
-from app.api import auth, bonds, quotes, trades, futures, swaps, dashboard, favorites, admin, alerts
+from app.api import auth, bonds, quotes, trades, futures, swaps, dashboard, favorites, admin, alerts, watchlist_groups
 from app.services.alert_service import alert_monitor_loop
 
 logger.remove()
@@ -63,6 +63,7 @@ app.include_router(dashboard.router)
 app.include_router(favorites.router)
 app.include_router(admin.router)
 app.include_router(alerts.router)
+app.include_router(watchlist_groups.router)
 
 
 @app.get("/api/health")
