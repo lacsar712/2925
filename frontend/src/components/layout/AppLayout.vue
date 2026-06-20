@@ -58,6 +58,12 @@
           </template>
           债券对比
         </a-menu-item>
+        <a-menu-item key="/spread-analysis">
+          <template #icon>
+            <DiffOutlined />
+          </template>
+          利差分析
+        </a-menu-item>
 
         <a-sub-menu key="tools">
           <template #icon>
@@ -229,6 +235,7 @@ import {
   TransactionOutlined,
   StarOutlined,
   BarChartOutlined,
+  DiffOutlined,
   BellOutlined,
   SettingOutlined,
   FolderOutlined,

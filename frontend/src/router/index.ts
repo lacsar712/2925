@@ -27,6 +27,7 @@ const router = createRouter({
         { path: 'alerts/rules', name: 'AlertRules', component: () => import('../views/AlertRulesView.vue') },
         { path: 'alerts/history', name: 'AlertHistory', component: () => import('../views/AlertHistoryView.vue') },
         { path: 'compare', name: 'BondCompare', component: () => import('../views/BondCompareView.vue') },
+        { path: 'spread-analysis', name: 'SpreadAnalysis', component: () => import('../views/SpreadAnalysisView.vue') },
         { path: 'tools/bond-calculator', name: 'BondCalculator', component: () => import('../views/BondCalculatorView.vue') },
         { path: 'admin/users', name: 'AdminUsers', component: () => import('../views/admin/UserManagement.vue') },
         { path: 'admin/sources', name: 'AdminSources', component: () => import('../views/admin/SourceManagement.vue') },
