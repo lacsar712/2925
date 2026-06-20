@@ -52,6 +52,12 @@
           </template>
           我的关注
         </a-menu-item>
+        <a-menu-item key="/compare">
+          <template #icon>
+            <BarChartOutlined />
+          </template>
+          债券对比
+        </a-menu-item>
         <a-sub-menu key="alerts">
           <template #icon>
             <BellOutlined />
@@ -99,6 +105,7 @@ import {
   FundOutlined,
   TransactionOutlined,
   StarOutlined,
+  BarChartOutlined,
   BellOutlined,
   SettingOutlined,
 } from '@ant-design/icons-vue'

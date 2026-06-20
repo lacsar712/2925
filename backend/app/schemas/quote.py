@@ -58,3 +58,27 @@ class BondBasic(BaseModel):
 
 
 AggregatedQuoteOut.model_rebuild()
+
+
+class BondCompareData(BaseModel):
+    id: UUID
+    code: str
+    name: str
+    bond_type: str
+    credit_rating: Optional[str] = None
+    remaining_term: Optional[float] = None
+    coupon_rate: Optional[float] = None
+    best_bid_price: Optional[float] = None
+    best_ask_price: Optional[float] = None
+    best_bid_yield: Optional[float] = None
+    best_ask_yield: Optional[float] = None
+    latest_trade_price: Optional[float] = None
+    latest_trade_yield: Optional[float] = None
+    volume_7d: Optional[float] = None
+    spread: Optional[float] = None
+
+    model_config = {"from_attributes": True}
+
+
+class BondCompareResponse(BaseModel):
+    items: list[BondCompareData]

@@ -1,8 +1,9 @@
 from uuid import UUID
-from typing import Optional
+from typing import Optional, List
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -10,7 +11,7 @@ from app.models.bond import Bond, MarketSource
 from app.models.quote import Quote
 from app.models.trade import Trade
 from app.schemas.bond import BondOut, BondListOut
-from app.schemas.quote import QuoteOut, AggregatedQuoteOut, SourceQuoteSummary, BondBasic
+from app.schemas.quote import QuoteOut, AggregatedQuoteOut, SourceQuoteSummary, BondBasic, BondCompareData, BondCompareResponse
 from app.schemas.trade import TradeOut
 from app.api.deps import get_current_user
 
@@ -178,3 +179,86 @@ async def get_aggregated_quotes(bond_id: UUID, db: AsyncSession = Depends(get_db
         spread=spread,
         total_quotes=total_quotes,
     )
+
+
+@router.get("/compare/batch", response_model=BondCompareResponse)
+async def get_bonds_compare(
+    bond_ids: str = Query(..., description="债券ID列表，逗号分隔"),
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(get_current_user),
+):
+    id_list = [UUID(id_str.strip()) for id_str in bond_ids.split(",") if id_str.strip()]
+    if len(id_list) == 0:
+        raise HTTPException(status_code=400, detail="请提供至少一个债券ID")
+    if len(id_list) > 4:
+        raise HTTPException(status_code=400, detail="最多只能对比4只债券")
+
+    seven_days_ago = datetime.now() - timedelta(days=7)
+
+    result = []
+    for bond_id in id_list:
+        bond_result = await db.execute(select(Bond).where(Bond.id == bond_id))
+        bond = bond_result.scalar_one_or_none()
+        if not bond:
+            continue
+
+        quotes_result = await db.execute(
+            select(
+                func.max(Quote.bid_price).label("best_bid"),
+                func.min(Quote.ask_price).label("best_ask"),
+                func.max(Quote.bid_yield).label("best_bid_yield"),
+                func.min(Quote.ask_yield).label("best_ask_yield"),
+            )
+            .where(Quote.bond_id == bond_id)
+        )
+        quote_row = quotes_result.first()
+
+        best_bid = float(quote_row.best_bid) if quote_row and quote_row.best_bid else None
+        best_ask = float(quote_row.best_ask) if quote_row and quote_row.best_ask else None
+        best_bid_yield = float(quote_row.best_bid_yield) if quote_row and quote_row.best_bid_yield else None
+        best_ask_yield = float(quote_row.best_ask_yield) if quote_row and quote_row.best_ask_yield else None
+
+        spread = None
+        if best_ask and best_bid:
+            spread = round(best_ask - best_bid, 4)
+
+        latest_trade_result = await db.execute(
+            select(Trade.price, Trade.yield_rate)
+            .where(Trade.bond_id == bond_id)
+            .order_by(Trade.trade_time.desc())
+            .limit(1)
+        )
+        latest_trade = latest_trade_result.first()
+        latest_trade_price = float(latest_trade.price) if latest_trade else None
+        latest_trade_yield = float(latest_trade.yield_rate) if latest_trade and latest_trade.yield_rate else None
+
+        volume_7d_result = await db.execute(
+            select(func.sum(Trade.volume))
+            .where(
+                and_(
+                    Trade.bond_id == bond_id,
+                    Trade.trade_time >= seven_days_ago,
+                )
+            )
+        )
+        volume_7d = float(volume_7d_result.scalar() or 0)
+
+        result.append(BondCompareData(
+            id=bond.id,
+            code=bond.code,
+            name=bond.name,
+            bond_type=bond.bond_type,
+            credit_rating=bond.credit_rating,
+            remaining_term=float(bond.remaining_term) if bond.remaining_term else None,
+            coupon_rate=float(bond.coupon_rate) if bond.coupon_rate else None,
+            best_bid_price=best_bid,
+            best_ask_price=best_ask,
+            best_bid_yield=best_bid_yield,
+            best_ask_yield=best_ask_yield,
+            latest_trade_price=latest_trade_price,
+            latest_trade_yield=latest_trade_yield,
+            volume_7d=volume_7d,
+            spread=spread,
+        ))
+
+    return BondCompareResponse(items=result)

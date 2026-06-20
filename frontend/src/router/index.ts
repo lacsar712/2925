@@ -25,6 +25,7 @@ const router = createRouter({
         { path: 'favorites', name: 'Favorites', component: () => import('../views/FavoritesView.vue') },
         { path: 'alerts/rules', name: 'AlertRules', component: () => import('../views/AlertRulesView.vue') },
         { path: 'alerts/history', name: 'AlertHistory', component: () => import('../views/AlertHistoryView.vue') },
+        { path: 'compare', name: 'BondCompare', component: () => import('../views/BondCompareView.vue') },
         { path: 'admin/users', name: 'AdminUsers', component: () => import('../views/admin/UserManagement.vue') },
         { path: 'admin/sources', name: 'AdminSources', component: () => import('../views/admin/SourceManagement.vue') },
       ],
