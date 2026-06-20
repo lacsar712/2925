@@ -144,16 +144,48 @@
               <span class="tabular-nums">{{ record.remaining_term != null ? record.remaining_term.toFixed(2) : '--' }}</span>
             </template>
             <template v-else-if="column.key === 'best_bid_price'">
-              <span class="tabular-nums text-green-600 font-medium">{{ record.best_bid_price != null ? record.best_bid_price.toFixed(4) : '--' }}</span>
+              <span
+                class="tabular-nums"
+                :class="[
+                  record.best_bid_price != null ? 'text-green-600 font-medium' : '',
+                  getFlashClass(`${record.id}-best_bid`),
+                ]"
+              >
+                {{ record.best_bid_price != null ? record.best_bid_price.toFixed(4) : '--' }}
+              </span>
             </template>
             <template v-else-if="column.key === 'best_ask_price'">
-              <span class="tabular-nums text-red-600 font-medium">{{ record.best_ask_price != null ? record.best_ask_price.toFixed(4) : '--' }}</span>
+              <span
+                class="tabular-nums"
+                :class="[
+                  record.best_ask_price != null ? 'text-red-600 font-medium' : '',
+                  getFlashClass(`${record.id}-best_ask`),
+                ]"
+              >
+                {{ record.best_ask_price != null ? record.best_ask_price.toFixed(4) : '--' }}
+              </span>
             </template>
             <template v-else-if="column.key === 'best_bid_yield'">
-              <span class="tabular-nums text-green-600">{{ record.best_bid_yield != null ? record.best_bid_yield.toFixed(4) + '%' : '--' }}</span>
+              <span
+                class="tabular-nums"
+                :class="[
+                  'text-green-600',
+                  getFlashClass(`${record.id}-best_bid_yield`),
+                ]"
+              >
+                {{ record.best_bid_yield != null ? record.best_bid_yield.toFixed(4) + '%' : '--' }}
+              </span>
             </template>
             <template v-else-if="column.key === 'best_ask_yield'">
-              <span class="tabular-nums text-red-600">{{ record.best_ask_yield != null ? record.best_ask_yield.toFixed(4) + '%' : '--' }}</span>
+              <span
+                class="tabular-nums"
+                :class="[
+                  'text-red-600',
+                  getFlashClass(`${record.id}-best_ask_yield`),
+                ]"
+              >
+                {{ record.best_ask_yield != null ? record.best_ask_yield.toFixed(4) + '%' : '--' }}
+              </span>
             </template>
             <template v-else-if="column.key === 'latest_trade_price'">
               <span class="tabular-nums">{{ record.latest_trade_price != null ? record.latest_trade_price.toFixed(4) : '--' }}</span>
@@ -201,7 +233,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
@@ -209,6 +241,8 @@ import {
 import api from '../api'
 import { bondTypeColor, formatVolume } from '../utils/format'
 import { useWatchlistStore } from '../stores/watchlist'
+import { useWebSocketStore, type BondQuoteUpdate } from '../stores/websocket'
+import { usePriceFlash } from '../composables/usePriceFlash'
 
 interface SearchBond {
   id: string
@@ -221,6 +255,8 @@ interface SearchBond {
 const route = useRoute()
 const router = useRouter()
 const watchlistStore = useWatchlistStore()
+const wsStore = useWebSocketStore()
+const { compareAndFlash, getFlashClass, clearAll } = usePriceFlash()
 
 const searchKeyword = ref('')
 const searchResults = ref<SearchBond[]>([])
@@ -348,15 +384,69 @@ async function handleDeleteGroup() {
   }
 }
 
+const prevPrices = new Map<string, { best_bid?: number; best_ask?: number; best_bid_yield?: number; best_ask_yield?: number }>()
+
+function handleQuoteUpdate(update: BondQuoteUpdate) {
+  if (!currentGroup.value) return
+
+  const prev = prevPrices.get(update.bond_id) || {}
+
+  compareAndFlash(`${update.bond_id}-best_bid`, update.best_bid_price, prev.best_bid)
+  compareAndFlash(`${update.bond_id}-best_ask`, update.best_ask_price, prev.best_ask)
+  compareAndFlash(`${update.bond_id}-best_bid_yield`, update.best_bid_yield, prev.best_bid_yield)
+  compareAndFlash(`${update.bond_id}-best_ask_yield`, update.best_ask_yield, prev.best_ask_yield)
+
+  prevPrices.set(update.bond_id, {
+    best_bid: update.best_bid_price,
+    best_ask: update.best_ask_price,
+    best_bid_yield: update.best_bid_yield,
+    best_ask_yield: update.best_ask_yield,
+  })
+
+  const bond = currentGroup.value.bonds.find(b => b.id === update.bond_id)
+  if (bond) {
+    ;(bond as any).best_bid_price = update.best_bid_price
+    ;(bond as any).best_ask_price = update.best_ask_price
+    ;(bond as any).best_bid_yield = update.best_bid_yield
+    ;(bond as any).best_ask_yield = update.best_ask_yield
+    ;(bond as any).spread = update.spread
+  }
+}
+
+function subscribeGroupBonds() {
+  if (!currentGroup.value || currentGroup.value.bonds.length === 0) return
+  const bondIds = currentGroup.value.bonds.map(b => b.id)
+  wsStore.subscribeBonds(bondIds, handleQuoteUpdate)
+}
+
+function unsubscribeGroupBonds() {
+  if (!currentGroup.value || currentGroup.value.bonds.length === 0) return
+  const bondIds = currentGroup.value.bonds.map(b => b.id)
+  wsStore.unsubscribeBonds(bondIds, handleQuoteUpdate)
+}
+
+watch(
+  () => currentGroup.value?.bonds?.length,
+  () => {
+    unsubscribeGroupBonds()
+    subscribeGroupBonds()
+  }
+)
+
 onMounted(() => {
   if (groupId.value) {
-    watchlistStore.fetchGroupDetail(groupId.value)
+    watchlistStore.fetchGroupDetail(groupId.value).then(() => {
+      subscribeGroupBonds()
+    })
   }
   watchlistStore.fetchGroups()
 })
 
 onUnmounted(() => {
+  unsubscribeGroupBonds()
   watchlistStore.clearCurrentGroup()
+  clearAll()
+  prevPrices.clear()
 })
 </script>
 

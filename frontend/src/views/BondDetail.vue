@@ -112,13 +112,25 @@
           <a-row :gutter="24">
             <a-col :span="6">
               <div class="text-gray-500 text-sm mb-1">最优买价</div>
-              <div class="text-xl font-bold text-green-600 tabular-nums">
+              <div
+                class="text-xl font-bold tabular-nums"
+                :class="[
+                  aggregated?.best_bid_price != null ? 'text-green-600' : '',
+                  getFlashClass(`${bondId.value}-best_bid`),
+                ]"
+              >
                 {{ formatPrice(aggregated?.best_bid_price) }}
               </div>
             </a-col>
             <a-col :span="6">
               <div class="text-gray-500 text-sm mb-1">最优卖价</div>
-              <div class="text-xl font-bold text-red-600 tabular-nums">
+              <div
+                class="text-xl font-bold tabular-nums"
+                :class="[
+                  aggregated?.best_ask_price != null ? 'text-red-600' : '',
+                  getFlashClass(`${bondId.value}-best_ask`),
+                ]"
+              >
                 {{ formatPrice(aggregated?.best_ask_price) }}
               </div>
             </a-col>
@@ -136,13 +148,25 @@
           <a-row :gutter="24" class="mt-4">
             <a-col :span="12">
               <div class="text-gray-500 text-sm mb-1">最优买入收益率</div>
-              <div class="text-lg font-semibold tabular-nums text-green-600">
+              <div
+                class="text-lg font-semibold tabular-nums"
+                :class="[
+                  'text-green-600',
+                  getFlashClass(`${bondId.value}-best_bid_yield`),
+                ]"
+              >
                 {{ formatYield(aggregated?.best_bid_yield) }}
               </div>
             </a-col>
             <a-col :span="12">
               <div class="text-gray-500 text-sm mb-1">最优卖出收益率</div>
-              <div class="text-lg font-semibold tabular-nums text-red-600">
+              <div
+                class="text-lg font-semibold tabular-nums"
+                :class="[
+                  'text-red-600',
+                  getFlashClass(`${bondId.value}-best_ask_yield`),
+                ]"
+              >
                 {{ formatYield(aggregated?.best_ask_yield) }}
               </div>
             </a-col>
@@ -166,16 +190,42 @@
                     <a-tag>{{ sourceTypeLabel(record.source_type) }}</a-tag>
                   </template>
                   <template v-else-if="column.key === 'best_bid'">
-                    <span class="tabular-nums text-green-600">{{ formatPrice(record.best_bid_price) }}</span>
+                    <span
+                      class="tabular-nums"
+                      :class="[
+                        'text-green-600',
+                        getFlashClass(`${bondId.value}-${record.source_name}-bid`),
+                      ]"
+                    >
+                      {{ formatPrice(record.best_bid_price) }}
+                    </span>
                   </template>
                   <template v-else-if="column.key === 'best_ask'">
-                    <span class="tabular-nums text-red-600">{{ formatPrice(record.best_ask_price) }}</span>
+                    <span
+                      class="tabular-nums"
+                      :class="[
+                        'text-red-600',
+                        getFlashClass(`${bondId.value}-${record.source_name}-ask`),
+                      ]"
+                    >
+                      {{ formatPrice(record.best_ask_price) }}
+                    </span>
                   </template>
                   <template v-else-if="column.key === 'bid_yield'">
-                    <span class="tabular-nums">{{ formatYield(record.best_bid_yield) }}</span>
+                    <span
+                      class="tabular-nums"
+                      :class="getFlashClass(`${bondId.value}-${record.source_name}-bid_yield`)"
+                    >
+                      {{ formatYield(record.best_bid_yield) }}
+                    </span>
                   </template>
                   <template v-else-if="column.key === 'ask_yield'">
-                    <span class="tabular-nums">{{ formatYield(record.best_ask_yield) }}</span>
+                    <span
+                      class="tabular-nums"
+                      :class="getFlashClass(`${bondId.value}-${record.source_name}-ask_yield`)"
+                    >
+                      {{ formatYield(record.best_ask_yield) }}
+                    </span>
                   </template>
                   <template v-else-if="column.key === 'latest_time'">
                     <span class="tabular-nums">{{ formatDateTime(record.latest_quote_time) }}</span>
@@ -360,7 +410,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { FormInstance } from 'ant-design-vue'
@@ -375,9 +425,13 @@ import {
   sourceTypeLabel,
 } from '../utils/format'
 import { useAlertStore, type AlertRule, type AlertRuleCreate } from '../stores/alert'
+import { useWebSocketStore, type BondQuoteUpdate } from '../stores/websocket'
+import { usePriceFlash } from '../composables/usePriceFlash'
 
 const route = useRoute()
 const alertStore = useAlertStore()
+const wsStore = useWebSocketStore()
+const { compareAndFlash, getFlashClass, clearAll } = usePriceFlash()
 const bondId = computed(() => route.params.id as string)
 
 interface Bond {
@@ -667,4 +721,69 @@ async function handleQuickAlertSubmit() {
 }
 
 watch(bondId, fetchData, { immediate: true })
+
+const prevPrices = new Map<string, { best_bid?: number; best_ask?: number; best_bid_yield?: number; best_ask_yield?: number; sources?: Map<string, { bid?: number; ask?: number; bid_yield?: number; ask_yield?: number }> }>()
+
+function handleQuoteUpdate(update: BondQuoteUpdate) {
+  if (!aggregated.value) return
+
+  const prev = prevPrices.get(update.bond_id) || {}
+
+  compareAndFlash(`${update.bond_id}-best_bid`, update.best_bid_price, prev.best_bid)
+  compareAndFlash(`${update.bond_id}-best_ask`, update.best_ask_price, prev.best_ask)
+  compareAndFlash(`${update.bond_id}-best_bid_yield`, update.best_bid_yield, prev.best_bid_yield)
+  compareAndFlash(`${update.bond_id}-best_ask_yield`, update.best_ask_yield, prev.best_ask_yield)
+
+  const prevSources = prev.sources || new Map()
+  update.sources.forEach((src) => {
+    const prevSrc = prevSources.get(src.source_name) || {}
+    compareAndFlash(`${update.bond_id}-${src.source_name}-bid`, src.best_bid_price, prevSrc.bid)
+    compareAndFlash(`${update.bond_id}-${src.source_name}-ask`, src.best_ask_price, prevSrc.ask)
+    compareAndFlash(`${update.bond_id}-${src.source_name}-bid_yield`, src.best_bid_yield, prevSrc.bid_yield)
+    compareAndFlash(`${update.bond_id}-${src.source_name}-ask_yield`, src.best_ask_yield, prevSrc.ask_yield)
+  })
+
+  const newSourcesMap = new Map<string, { bid?: number; ask?: number; bid_yield?: number; ask_yield?: number }>()
+  update.sources.forEach((src) => {
+    newSourcesMap.set(src.source_name, {
+      bid: src.best_bid_price,
+      ask: src.best_ask_price,
+      bid_yield: src.best_bid_yield,
+      ask_yield: src.best_ask_yield,
+    })
+  })
+
+  prevPrices.set(update.bond_id, {
+    best_bid: update.best_bid_price,
+    best_ask: update.best_ask_price,
+    best_bid_yield: update.best_bid_yield,
+    best_ask_yield: update.best_ask_yield,
+    sources: newSourcesMap,
+  })
+
+  aggregated.value = {
+    ...aggregated.value,
+    sources: update.sources,
+    best_bid_price: update.best_bid_price,
+    best_ask_price: update.best_ask_price,
+    best_bid_yield: update.best_bid_yield,
+    best_ask_yield: update.best_ask_yield,
+    spread: update.spread,
+    total_quotes: update.total_quotes,
+  }
+}
+
+onMounted(() => {
+  if (bondId.value) {
+    wsStore.subscribeBond(bondId.value, handleQuoteUpdate)
+  }
+})
+
+onUnmounted(() => {
+  if (bondId.value) {
+    wsStore.unsubscribeBond(bondId.value, handleQuoteUpdate)
+  }
+  clearAll()
+  prevPrices.clear()
+})
 </script>

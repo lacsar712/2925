@@ -155,6 +155,7 @@
       <a-layout-header class="app-header flex items-center justify-between px-6 bg-white border-b border-gray-200">
         <div class="flex-1" />
         <div class="flex items-center gap-4">
+          <ConnectionStatus />
           <AlertBell />
           <span class="text-gray-600">{{ authStore.user?.display_name || authStore.user?.username }}</span>
           <a-tag :color="roleColor">{{ roleLabel }}</a-tag>
@@ -225,6 +226,7 @@ import {
 import { useAuthStore } from '../../stores/auth'
 import { useWatchlistStore } from '../../stores/watchlist'
 import AlertBell from './AlertBell.vue'
+import ConnectionStatus from './ConnectionStatus.vue'
 
 const router = useRouter()
 const route = useRoute()

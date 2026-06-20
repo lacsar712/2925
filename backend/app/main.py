@@ -9,8 +9,9 @@ import sys
 from app.config import settings
 from app.database import init_db, async_session
 from app.seed.seed_data import seed_all
-from app.api import auth, bonds, quotes, trades, futures, swaps, dashboard, favorites, admin, alerts, watchlist_groups
+from app.api import auth, bonds, quotes, trades, futures, swaps, dashboard, favorites, admin, alerts, watchlist_groups, websocket
 from app.services.alert_service import alert_monitor_loop
+from app.services.websocket_service import quote_broadcast_loop
 
 logger.remove()
 logger.add(sys.stderr, format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}", level="INFO")
@@ -28,13 +29,21 @@ async def lifespan(app: FastAPI):
     alert_task = asyncio.create_task(alert_monitor_loop(interval_seconds=10))
     logger.info("预警检测后台服务已启动")
 
+    quote_ws_task = asyncio.create_task(quote_broadcast_loop(interval_seconds=2))
+    logger.info("WebSocket 行情推送服务已启动")
+
     logger.info("系统启动完成")
     yield
     alert_task.cancel()
+    quote_ws_task.cancel()
     try:
         await alert_task
     except asyncio.CancelledError:
         logger.info("预警检测后台服务已停止")
+    try:
+        await quote_ws_task
+    except asyncio.CancelledError:
+        logger.info("WebSocket 行情推送服务已停止")
     logger.info("系统关闭")
 
 
@@ -64,6 +73,7 @@ app.include_router(favorites.router)
 app.include_router(admin.router)
 app.include_router(alerts.router)
 app.include_router(watchlist_groups.router)
+app.include_router(websocket.router)
 
 
 @app.get("/api/health")
