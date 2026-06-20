@@ -137,6 +137,9 @@
 
       <!-- 底部：行情异动提醒 -->
       <a-card title="行情异动提醒" class="rounded-lg">
+        <template #extra>
+          <span class="text-xs text-gray-400">更新于 {{ formatTime(alertsUpdatedAt) }}</span>
+        </template>
         <a-list
           :data-source="alerts"
           :loading="loading"
@@ -164,6 +167,10 @@
           </template>
         </a-list>
       </a-card>
+
+      <div class="text-right mt-4">
+        <span class="text-xs text-gray-400">看板数据更新于 {{ formatTime(overviewUpdatedAt) }}</span>
+      </div>
     </a-spin>
   </div>
 </template>
@@ -184,7 +191,7 @@ import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, TitleComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import api from '../api'
-import { formatVolume, formatAmount, bondTypeColor } from '../utils/format'
+import { formatVolume, formatAmount, bondTypeColor, formatTime } from '../utils/format'
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, TitleComponent])
 
@@ -227,6 +234,10 @@ const overview = ref<Overview | null>(null)
 const yieldCurve = ref<YieldPoint[]>([])
 const hotBonds = ref<HotBond[]>([])
 const alerts = ref<Alert[]>([])
+const overviewUpdatedAt = ref<string>('')
+const yieldCurveUpdatedAt = ref<string>('')
+const hotBondsUpdatedAt = ref<string>('')
+const alertsUpdatedAt = ref<string>('')
 
 const hotBondsColumns = [
   { title: '排名', key: 'rank', width: 60 },
@@ -281,10 +292,15 @@ async function fetchData() {
       api.get('/api/dashboard/hot-bonds'),
       api.get('/api/dashboard/alerts'),
     ])
-    overview.value = overviewRes.data
-    yieldCurve.value = Array.isArray(curveRes.data) ? curveRes.data : []
-    hotBonds.value = (Array.isArray(hotRes.data) ? hotRes.data : []).map((b: HotBond, i: number) => ({ ...b, rank: i + 1 }))
-    alerts.value = Array.isArray(alertsRes.data) ? alertsRes.data : []
+    overview.value = overviewRes.data?.data ?? overviewRes.data
+    overviewUpdatedAt.value = overviewRes.data?.updated_at ?? ''
+    yieldCurve.value = Array.isArray(curveRes.data?.data) ? curveRes.data.data : (Array.isArray(curveRes.data) ? curveRes.data : [])
+    yieldCurveUpdatedAt.value = curveRes.data?.updated_at ?? ''
+    const hotData = Array.isArray(hotRes.data?.data) ? hotRes.data.data : (Array.isArray(hotRes.data) ? hotRes.data : [])
+    hotBonds.value = hotData.map((b: HotBond, i: number) => ({ ...b, rank: i + 1 }))
+    hotBondsUpdatedAt.value = hotRes.data?.updated_at ?? ''
+    alerts.value = Array.isArray(alertsRes.data?.data) ? alertsRes.data.data : (Array.isArray(alertsRes.data) ? alertsRes.data : [])
+    alertsUpdatedAt.value = alertsRes.data?.updated_at ?? ''
   } catch {
     overview.value = null
     yieldCurve.value = []

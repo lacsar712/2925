@@ -109,6 +109,9 @@
 
         <!-- 全局最优行情摘要 -->
         <a-card title="全局最优行情摘要" class="mb-4">
+          <template #extra>
+            <span class="text-xs text-gray-400">更新于 {{ formatTime(aggregatedUpdatedAt) }}</span>
+          </template>
           <a-row :gutter="24">
             <a-col :span="6">
               <div class="text-gray-500 text-sm mb-1">最优买价</div>
@@ -503,6 +506,7 @@ const trades = ref<Trade[]>([])
 const favorites = ref<string[]>([])
 const favLoading = ref(false)
 const activeTab = ref('sources')
+const aggregatedUpdatedAt = ref<string>('')
 
 const bondRules = ref<AlertRule[]>([])
 const scrollToRules = ref(false)
@@ -592,13 +596,14 @@ async function fetchData() {
   try {
     const [bondRes, aggRes, quotesRes, tradesRes, favRes] = await Promise.all([
       api.get<Bond>(`/api/bonds/${bondId.value}`),
-      api.get<Aggregated>(`/api/bonds/${bondId.value}/aggregated`),
+      api.get<any>(`/api/bonds/${bondId.value}/aggregated`),
       api.get<Quote[]>(`/api/bonds/${bondId.value}/quotes`),
       api.get<Trade[]>(`/api/bonds/${bondId.value}/trades`),
       api.get<Bond[]>('/api/favorites'),
     ])
     bond.value = bondRes.data
-    aggregated.value = aggRes.data
+    aggregated.value = aggRes.data?.data ?? aggRes.data
+    aggregatedUpdatedAt.value = aggRes.data?.updated_at ?? ''
     quotes.value = quotesRes.data
     trades.value = tradesRes.data
     favorites.value = (favRes.data || []).map((b) => b.id)

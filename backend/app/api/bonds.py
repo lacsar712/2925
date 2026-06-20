@@ -14,8 +14,29 @@ from app.schemas.bond import BondOut, BondListOut
 from app.schemas.quote import QuoteOut, AggregatedQuoteOut, SourceQuoteSummary, BondBasic, BondCompareData, BondCompareResponse
 from app.schemas.trade import TradeOut
 from app.api.deps import get_current_user
+from app.config import settings
+from app.services.cache_service import CacheService
 
 router = APIRouter(prefix="/api/bonds", tags=["债券"])
+
+
+async def _cached_or_fetch(cache_key: str, cache_type: str, fetch_fn):
+    if settings.CACHE_ENABLED:
+        cached = await CacheService.get(cache_key)
+        if cached:
+            return {
+                "data": cached["data"],
+                "updated_at": cached["cached_at"],
+            }
+    data = await fetch_fn()
+    if settings.CACHE_ENABLED:
+        ttl = CacheService.get_ttl(cache_type)
+        await CacheService.set(cache_key, data, ttl=ttl)
+    from datetime import datetime as _dt
+    return {
+        "data": data,
+        "updated_at": _dt.now().isoformat(),
+    }
 
 
 @router.get("", response_model=BondListOut)
@@ -112,76 +133,80 @@ async def get_bond_trades(bond_id: UUID, db: AsyncSession = Depends(get_db), _us
     ]
 
 
-@router.get("/{bond_id}/aggregated", response_model=AggregatedQuoteOut)
+@router.get("/{bond_id}/aggregated")
 async def get_aggregated_quotes(bond_id: UUID, db: AsyncSession = Depends(get_db), _user=Depends(get_current_user)):
-    bond_result = await db.execute(select(Bond).where(Bond.id == bond_id))
-    bond = bond_result.scalar_one_or_none()
-    if not bond:
-        raise HTTPException(status_code=404, detail="债券不存在")
+    async def _fetch():
+        bond_result = await db.execute(select(Bond).where(Bond.id == bond_id))
+        bond = bond_result.scalar_one_or_none()
+        if not bond:
+            raise HTTPException(status_code=404, detail="债券不存在")
 
-    quotes_result = await db.execute(
-        select(
-            MarketSource.name,
-            MarketSource.source_type,
-            func.max(Quote.bid_price).label("best_bid"),
-            func.min(Quote.ask_price).label("best_ask"),
-            func.max(Quote.bid_yield).label("best_bid_yield"),
-            func.min(Quote.ask_yield).label("best_ask_yield"),
-            func.count(Quote.id).label("cnt"),
-            func.max(Quote.quote_time).label("latest_time"),
+        quotes_result = await db.execute(
+            select(
+                MarketSource.name,
+                MarketSource.source_type,
+                func.max(Quote.bid_price).label("best_bid"),
+                func.min(Quote.ask_price).label("best_ask"),
+                func.max(Quote.bid_yield).label("best_bid_yield"),
+                func.min(Quote.ask_yield).label("best_ask_yield"),
+                func.count(Quote.id).label("cnt"),
+                func.max(Quote.quote_time).label("latest_time"),
+            )
+            .join(MarketSource, Quote.source_id == MarketSource.id)
+            .where(Quote.bond_id == bond_id)
+            .group_by(MarketSource.name, MarketSource.source_type)
         )
-        .join(MarketSource, Quote.source_id == MarketSource.id)
-        .where(Quote.bond_id == bond_id)
-        .group_by(MarketSource.name, MarketSource.source_type)
-    )
-    source_rows = quotes_result.all()
+        source_rows = quotes_result.all()
 
-    sources = []
-    global_best_bid = None
-    global_best_ask = None
-    global_best_bid_yield = None
-    global_best_ask_yield = None
-    total_quotes = 0
+        sources = []
+        global_best_bid = None
+        global_best_ask = None
+        global_best_bid_yield = None
+        global_best_ask_yield = None
+        total_quotes = 0
 
-    for row in source_rows:
-        sources.append(SourceQuoteSummary(
-            source_name=row.name,
-            source_type=row.source_type,
-            best_bid_price=float(row.best_bid) if row.best_bid else None,
-            best_ask_price=float(row.best_ask) if row.best_ask else None,
-            best_bid_yield=float(row.best_bid_yield) if row.best_bid_yield else None,
-            best_ask_yield=float(row.best_ask_yield) if row.best_ask_yield else None,
-            quote_count=row.cnt,
-            latest_quote_time=row.latest_time,
-        ))
-        total_quotes += row.cnt
+        for row in source_rows:
+            sources.append(SourceQuoteSummary(
+                source_name=row.name,
+                source_type=row.source_type,
+                best_bid_price=float(row.best_bid) if row.best_bid else None,
+                best_ask_price=float(row.best_ask) if row.best_ask else None,
+                best_bid_yield=float(row.best_bid_yield) if row.best_bid_yield else None,
+                best_ask_yield=float(row.best_ask_yield) if row.best_ask_yield else None,
+                quote_count=row.cnt,
+                latest_quote_time=row.latest_time,
+            ).model_dump())
+            total_quotes += row.cnt
 
-        if row.best_bid and (global_best_bid is None or float(row.best_bid) > global_best_bid):
-            global_best_bid = float(row.best_bid)
-        if row.best_ask and (global_best_ask is None or float(row.best_ask) < global_best_ask):
-            global_best_ask = float(row.best_ask)
-        if row.best_bid_yield and (global_best_bid_yield is None or float(row.best_bid_yield) > global_best_bid_yield):
-            global_best_bid_yield = float(row.best_bid_yield)
-        if row.best_ask_yield and (global_best_ask_yield is None or float(row.best_ask_yield) < global_best_ask_yield):
-            global_best_ask_yield = float(row.best_ask_yield)
+            if row.best_bid and (global_best_bid is None or float(row.best_bid) > global_best_bid):
+                global_best_bid = float(row.best_bid)
+            if row.best_ask and (global_best_ask is None or float(row.best_ask) < global_best_ask):
+                global_best_ask = float(row.best_ask)
+            if row.best_bid_yield and (global_best_bid_yield is None or float(row.best_bid_yield) > global_best_bid_yield):
+                global_best_bid_yield = float(row.best_bid_yield)
+            if row.best_ask_yield and (global_best_ask_yield is None or float(row.best_ask_yield) < global_best_ask_yield):
+                global_best_ask_yield = float(row.best_ask_yield)
 
-    spread = None
-    if global_best_ask and global_best_bid:
-        spread = round(global_best_ask - global_best_bid, 4)
+        spread = None
+        if global_best_ask and global_best_bid:
+            spread = round(global_best_ask - global_best_bid, 4)
 
-    return AggregatedQuoteOut(
-        bond=BondBasic.model_validate(bond),
-        sources=sources,
-        best_bid_price=global_best_bid,
-        best_ask_price=global_best_ask,
-        best_bid_yield=global_best_bid_yield,
-        best_ask_yield=global_best_ask_yield,
-        spread=spread,
-        total_quotes=total_quotes,
-    )
+        return AggregatedQuoteOut(
+            bond=BondBasic.model_validate(bond),
+            sources=sources,
+            best_bid_price=global_best_bid,
+            best_ask_price=global_best_ask,
+            best_bid_yield=global_best_bid_yield,
+            best_ask_yield=global_best_ask_yield,
+            spread=spread,
+            total_quotes=total_quotes,
+        ).model_dump()
+
+    cache_key = f"bonds:aggregated:{bond_id}"
+    return await _cached_or_fetch(cache_key, "bonds", _fetch)
 
 
-@router.get("/compare/batch", response_model=BondCompareResponse)
+@router.get("/compare/batch")
 async def get_bonds_compare(
     bond_ids: str = Query(..., description="债券ID列表，逗号分隔"),
     db: AsyncSession = Depends(get_db),
@@ -193,72 +218,78 @@ async def get_bonds_compare(
     if len(id_list) > 4:
         raise HTTPException(status_code=400, detail="最多只能对比4只债券")
 
-    seven_days_ago = datetime.now() - timedelta(days=7)
+    cache_key_suffix = "_".join(sorted([str(i) for i in id_list]))
 
-    result = []
-    for bond_id in id_list:
-        bond_result = await db.execute(select(Bond).where(Bond.id == bond_id))
-        bond = bond_result.scalar_one_or_none()
-        if not bond:
-            continue
+    async def _fetch():
+        seven_days_ago = datetime.now() - timedelta(days=7)
 
-        quotes_result = await db.execute(
-            select(
-                func.max(Quote.bid_price).label("best_bid"),
-                func.min(Quote.ask_price).label("best_ask"),
-                func.max(Quote.bid_yield).label("best_bid_yield"),
-                func.min(Quote.ask_yield).label("best_ask_yield"),
+        result = []
+        for bond_id in id_list:
+            bond_result = await db.execute(select(Bond).where(Bond.id == bond_id))
+            bond = bond_result.scalar_one_or_none()
+            if not bond:
+                continue
+
+            quotes_result = await db.execute(
+                select(
+                    func.max(Quote.bid_price).label("best_bid"),
+                    func.min(Quote.ask_price).label("best_ask"),
+                    func.max(Quote.bid_yield).label("best_bid_yield"),
+                    func.min(Quote.ask_yield).label("best_ask_yield"),
+                )
+                .where(Quote.bond_id == bond_id)
             )
-            .where(Quote.bond_id == bond_id)
-        )
-        quote_row = quotes_result.first()
+            quote_row = quotes_result.first()
 
-        best_bid = float(quote_row.best_bid) if quote_row and quote_row.best_bid else None
-        best_ask = float(quote_row.best_ask) if quote_row and quote_row.best_ask else None
-        best_bid_yield = float(quote_row.best_bid_yield) if quote_row and quote_row.best_bid_yield else None
-        best_ask_yield = float(quote_row.best_ask_yield) if quote_row and quote_row.best_ask_yield else None
+            best_bid = float(quote_row.best_bid) if quote_row and quote_row.best_bid else None
+            best_ask = float(quote_row.best_ask) if quote_row and quote_row.best_ask else None
+            best_bid_yield = float(quote_row.best_bid_yield) if quote_row and quote_row.best_bid_yield else None
+            best_ask_yield = float(quote_row.best_ask_yield) if quote_row and quote_row.best_ask_yield else None
 
-        spread = None
-        if best_ask and best_bid:
-            spread = round(best_ask - best_bid, 4)
+            spread = None
+            if best_ask and best_bid:
+                spread = round(best_ask - best_bid, 4)
 
-        latest_trade_result = await db.execute(
-            select(Trade.price, Trade.yield_rate)
-            .where(Trade.bond_id == bond_id)
-            .order_by(Trade.trade_time.desc())
-            .limit(1)
-        )
-        latest_trade = latest_trade_result.first()
-        latest_trade_price = float(latest_trade.price) if latest_trade else None
-        latest_trade_yield = float(latest_trade.yield_rate) if latest_trade and latest_trade.yield_rate else None
+            latest_trade_result = await db.execute(
+                select(Trade.price, Trade.yield_rate)
+                .where(Trade.bond_id == bond_id)
+                .order_by(Trade.trade_time.desc())
+                .limit(1)
+            )
+            latest_trade = latest_trade_result.first()
+            latest_trade_price = float(latest_trade.price) if latest_trade else None
+            latest_trade_yield = float(latest_trade.yield_rate) if latest_trade and latest_trade.yield_rate else None
 
-        volume_7d_result = await db.execute(
-            select(func.sum(Trade.volume))
-            .where(
-                and_(
-                    Trade.bond_id == bond_id,
-                    Trade.trade_time >= seven_days_ago,
+            volume_7d_result = await db.execute(
+                select(func.sum(Trade.volume))
+                .where(
+                    and_(
+                        Trade.bond_id == bond_id,
+                        Trade.trade_time >= seven_days_ago,
+                    )
                 )
             )
-        )
-        volume_7d = float(volume_7d_result.scalar() or 0)
+            volume_7d = float(volume_7d_result.scalar() or 0)
 
-        result.append(BondCompareData(
-            id=bond.id,
-            code=bond.code,
-            name=bond.name,
-            bond_type=bond.bond_type,
-            credit_rating=bond.credit_rating,
-            remaining_term=float(bond.remaining_term) if bond.remaining_term else None,
-            coupon_rate=float(bond.coupon_rate) if bond.coupon_rate else None,
-            best_bid_price=best_bid,
-            best_ask_price=best_ask,
-            best_bid_yield=best_bid_yield,
-            best_ask_yield=best_ask_yield,
-            latest_trade_price=latest_trade_price,
-            latest_trade_yield=latest_trade_yield,
-            volume_7d=volume_7d,
-            spread=spread,
-        ))
+            result.append(BondCompareData(
+                id=bond.id,
+                code=bond.code,
+                name=bond.name,
+                bond_type=bond.bond_type,
+                credit_rating=bond.credit_rating,
+                remaining_term=float(bond.remaining_term) if bond.remaining_term else None,
+                coupon_rate=float(bond.coupon_rate) if bond.coupon_rate else None,
+                best_bid_price=best_bid,
+                best_ask_price=best_ask,
+                best_bid_yield=best_bid_yield,
+                best_ask_yield=best_ask_yield,
+                latest_trade_price=latest_trade_price,
+                latest_trade_yield=latest_trade_yield,
+                volume_7d=volume_7d,
+                spread=spread,
+            ).model_dump())
 
-    return BondCompareResponse(items=result)
+        return BondCompareResponse(items=result).model_dump()
+
+    cache_key = f"bonds:compare:{cache_key_suffix}"
+    return await _cached_or_fetch(cache_key, "bonds", _fetch)

@@ -46,6 +46,11 @@ services:
       BONDVIEW_REDIS_URL: redis://redis:6379/0
       BONDVIEW_DEBUG: "false"
       BONDVIEW_SECRET_KEY: "bondview-dev-secret-key-2024"
+      BONDVIEW_CACHE_ENABLED: "true"
+      BONDVIEW_CACHE_DEFAULT_TTL: "60"
+      BONDVIEW_CACHE_DASHBOARD_TTL: "30"
+      BONDVIEW_CACHE_QUOTES_TTL: "15"
+      BONDVIEW_CACHE_BONDS_TTL: "20"
     depends_on:
       db:
         condition: service_healthy

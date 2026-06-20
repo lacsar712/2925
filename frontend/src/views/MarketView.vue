@@ -272,11 +272,12 @@ async function fetchBonds() {
     const bondIds = bonds.value.map((b) => b.id)
     if (bondIds.length > 0) {
       try {
-        const compareRes = await api.get<{ items: any[] }>('/api/bonds/compare/batch', {
+        const compareRes = await api.get<any>('/api/bonds/compare/batch', {
           params: { bond_ids: bondIds.join(',') },
         })
-        const compareItems = compareRes.data.items || []
-        compareItems.forEach((item) => {
+        const compareData = compareRes.data?.data ?? compareRes.data
+        const compareItems = compareData?.items || []
+        compareItems.forEach((item: any) => {
           quoteDataMap.value.set(item.id, {
             bond_id: item.id,
             code: item.code,

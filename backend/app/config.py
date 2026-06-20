@@ -15,6 +15,12 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://frontend:80"]
 
+    CACHE_ENABLED: bool = True
+    CACHE_DEFAULT_TTL: int = 60
+    CACHE_DASHBOARD_TTL: int = 30
+    CACHE_QUOTES_TTL: int = 15
+    CACHE_BONDS_TTL: int = 20
+
     model_config = {"env_prefix": "BONDVIEW_"}
 
 

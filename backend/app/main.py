@@ -12,6 +12,7 @@ from app.seed.seed_data import seed_all
 from app.api import auth, bonds, quotes, trades, futures, swaps, dashboard, favorites, admin, alerts, watchlist_groups, websocket
 from app.services.alert_service import alert_monitor_loop
 from app.services.websocket_service import quote_broadcast_loop
+from app.services.cache_service import CacheService
 
 logger.remove()
 logger.add(sys.stderr, format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}", level="INFO")
@@ -32,6 +33,8 @@ async def lifespan(app: FastAPI):
     quote_ws_task = asyncio.create_task(quote_broadcast_loop(interval_seconds=2))
     logger.info("WebSocket 行情推送服务已启动")
 
+    if settings.CACHE_ENABLED:
+        logger.info("Redis 缓存模块已启用")
     logger.info("系统启动完成")
     yield
     alert_task.cancel()
@@ -44,6 +47,8 @@ async def lifespan(app: FastAPI):
         await quote_ws_task
     except asyncio.CancelledError:
         logger.info("WebSocket 行情推送服务已停止")
+    await CacheService.close()
+    logger.info("Redis 连接已关闭")
     logger.info("系统关闭")
 
 
