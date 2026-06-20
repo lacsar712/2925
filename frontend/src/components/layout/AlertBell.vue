@@ -3,9 +3,10 @@
     :trigger="['click']"
     placement="bottomRight"
     @visible-change="onDropdownVisible"
+    :overlay-style="{ minWidth: '400px' }"
   >
     <a-badge
-      :count="unreadCount > 99 ? '99+' : unreadCount"
+      :count="totalUnread > 99 ? '99+' : totalUnread"
       :number-style="{ backgroundColor: '#ff4d4f', boxShadow: '0 0 0 2px #fff' }"
       :offset="[-4, 4]"
     >
@@ -13,22 +14,22 @@
         type="text"
         size="large"
         class="alert-bell-btn"
-        :class="{ 'has-unread': unreadCount > 0 }"
+        :class="{ 'has-unread': totalUnread > 0 }"
       >
         <BellOutlined :style="{ fontSize: '18px' }" />
       </a-button>
     </a-badge>
 
     <template #overlay>
-      <div class="alert-dropdown">
-        <div class="alert-dropdown-header flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <span class="font-semibold text-gray-700">告警通知</span>
+      <div class="message-dropdown">
+        <div class="message-dropdown-header flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <span class="font-semibold text-gray-700">消息中心</span>
           <a-space>
-            <a-button type="link" size="small" @click="goToHistory">
+            <a-button type="link" size="small" @click="goToMessageCenter">
               查看全部
             </a-button>
             <a-button
-              v-if="unreadCount > 0"
+              v-if="totalUnread > 0"
               type="link"
               size="small"
               :loading="markAllLoading"
@@ -39,10 +40,28 @@
           </a-space>
         </div>
 
-        <div class="alert-dropdown-body max-h-96 overflow-y-auto min-w-80">
+        <div class="message-tabs px-4 py-2 border-b border-gray-100">
+          <div class="flex gap-1 overflow-x-auto">
+            <a-tag
+              v-for="tab in tabs"
+              :key="tab.key"
+              :color="activeTab === tab.key ? tab.color : 'default'"
+              class="cursor-pointer transition-all"
+              :class="{ 'font-semibold': activeTab === tab.key }"
+              @click="activeTab = tab.key"
+            >
+              {{ tab.label }}
+              <span v-if="unreadByType[tab.key as MessageType] > 0" class="ml-1">
+                ({{ unreadByType[tab.key as MessageType] }})
+              </span>
+            </a-tag>
+          </div>
+        </div>
+
+        <div class="message-dropdown-body max-h-96 overflow-y-auto">
           <a-empty
-            v-if="!loading && recentTriggers.length === 0"
-            description="暂无告警"
+            v-if="!loading && filteredMessages.length === 0"
+            description="暂无消息"
             class="py-12"
           />
           <div v-else-if="loading" class="py-12 flex justify-center">
@@ -50,57 +69,49 @@
           </div>
           <div v-else>
             <div
-              v-for="t in recentTriggers"
-              :key="t.id"
-              class="alert-item px-4 py-3 border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors"
-              :class="{ 'bg-red-50/40': !t.is_read }"
-              @click="handleItemClick(t)"
+              v-for="msg in filteredMessages"
+              :key="msg.id"
+              class="message-item px-4 py-3 border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors"
+              :class="{ 'bg-red-50/40': !msg.is_read }"
+              @click="handleMessageClick(msg)"
             >
               <div class="flex items-start justify-between gap-2 mb-1">
                 <div class="flex items-center gap-1.5 flex-wrap">
-                  <a-badge v-if="!t.is_read" status="error" />
+                  <a-badge v-if="!msg.is_read" status="error" />
                   <a-tag
-                    :color="t.alert_type === 'yield' ? 'blue' : 'purple'"
+                    :color="getMessageTypeColor(msg.type)"
                     size="small"
                     class="!mr-0"
                   >
-                    {{ t.alert_type === 'yield' ? '收益率' : '净价' }}
-                  </a-tag>
-                  <a-tag
-                    :color="t.condition === 'above' ? 'red' : 'green'"
-                    size="small"
-                    class="!mr-0"
-                  >
-                    {{ t.condition === 'above' ? '高于' : '低于' }}
+                    {{ getMessageTypeLabel(msg.type) }}
                   </a-tag>
                 </div>
                 <span class="text-xs text-gray-400 tabular-nums shrink-0 whitespace-nowrap">
-                  {{ formatRelativeTime(t.created_at) }}
+                  {{ formatRelativeTime(msg.created_at) }}
                 </span>
               </div>
-              <div class="text-sm font-medium text-gray-800 mb-1 truncate">
-                {{ t.bond?.name || '--' }}
-                <span class="text-gray-500 text-xs ml-1">({{ t.bond?.code || '--' }})</span>
+              <div class="text-sm font-medium text-gray-800 mb-1">
+                {{ msg.title }}
               </div>
-              <div class="text-xs text-gray-600 tabular-nums">
-                当前：
-                <span :class="t.condition === 'above' ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'">
-                  {{ Number(t.actual_value).toFixed(4) }}{{ t.alert_type === 'yield' ? '%' : '元' }}
+              <div class="text-xs text-gray-600 line-clamp-2">
+                {{ msg.content }}
+              </div>
+              <div v-if="msg.link" class="mt-2">
+                <span class="text-xs text-blue-600 hover:text-blue-700">
+                  {{ getLinkText(msg.link) }} →
                 </span>
-                <span class="mx-1 text-gray-400">/</span>
-                阈值：{{ Number(t.threshold).toFixed(4) }}{{ t.alert_type === 'yield' ? '%' : '元' }}
               </div>
             </div>
           </div>
         </div>
 
-        <div class="alert-dropdown-footer border-t border-gray-100 px-4 py-2">
+        <div class="message-dropdown-footer border-t border-gray-100 px-4 py-2">
           <router-link
-            to="/alerts/rules"
+            to="/messages"
             class="flex items-center justify-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 py-1.5"
           >
-            <SettingOutlined />
-            管理预警规则
+            <InboxOutlined />
+            进入消息中心
           </router-link>
         </div>
       </div>
@@ -112,24 +123,68 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { BellOutlined, SettingOutlined } from '@ant-design/icons-vue'
+import { BellOutlined, InboxOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
-import { formatDateTime } from '../utils/format'
-import { useAlertStore, type AlertTrigger } from '../stores/alert'
+import {
+  useMessageCenterStore,
+  type Message,
+  type MessageType,
+  type MessageLink,
+  MESSAGE_TYPE_LABEL,
+  MESSAGE_TYPE_COLOR,
+} from '../../stores/messageCenter'
 
 dayjs.extend(relativeTime)
 dayjs.locale('zh-cn')
 
 const router = useRouter()
-const alertStore = useAlertStore()
+const messageStore = useMessageCenterStore()
 
 const loading = ref(false)
 const markAllLoading = ref(false)
+const activeTab = ref<MessageType | 'all'>('all')
 
-const unreadCount = computed(() => alertStore.unreadCount)
-const recentTriggers = computed(() => alertStore.recentTriggers)
+const totalUnread = computed(() => messageStore.totalUnread)
+const unreadByType = computed(() => messageStore.unreadByType)
+const messages = computed(() => messageStore.messages)
+
+const tabs = [
+  { key: 'all' as const, label: '全部', color: 'blue' },
+  { key: 'announcement' as MessageType, label: '系统公告', color: 'blue' },
+  { key: 'market_movement' as MessageType, label: '行情异动', color: 'orange' },
+  { key: 'price_alert' as MessageType, label: '价格预警', color: 'red' },
+  { key: 'admin_broadcast' as MessageType, label: '管理员广播', color: 'purple' },
+]
+
+const filteredMessages = computed(() => {
+  if (activeTab.value === 'all') {
+    return messages.value
+  }
+  return messages.value.filter((m) => m.type === activeTab.value)
+})
+
+function getMessageTypeLabel(type: MessageType): string {
+  return MESSAGE_TYPE_LABEL[type] || type
+}
+
+function getMessageTypeColor(type: MessageType): string {
+  return MESSAGE_TYPE_COLOR[type] || 'default'
+}
+
+function getLinkText(link: MessageLink): string {
+  switch (link.type) {
+    case 'bond_detail':
+      return '查看债券详情'
+    case 'alert_list':
+      return '查看预警列表'
+    case 'market':
+      return '查看行情'
+    default:
+      return '查看详情'
+  }
+}
 
 function formatRelativeTime(iso?: string) {
   if (!iso) return '--'
@@ -145,8 +200,8 @@ async function onDropdownVisible(visible: boolean) {
     loading.value = true
     try {
       await Promise.all([
-        alertStore.fetchUnreadCount(),
-        alertStore.fetchRecentTriggers(20),
+        messageStore.fetchUnreadCount(),
+        messageStore.fetchRecentMessages(20),
       ])
     } finally {
       loading.value = false
@@ -154,37 +209,63 @@ async function onDropdownVisible(visible: boolean) {
   }
 }
 
-async function handleItemClick(t: AlertTrigger) {
-  if (!t.is_read) {
+async function handleMessageClick(msg: Message) {
+  if (!msg.is_read) {
     try {
-      await alertStore.markTriggerRead(t.id)
+      await messageStore.markMessageRead(msg.id)
     } catch {
       // ignore
     }
   }
-  router.push(`/market/${t.bond_id}`)
+
+  if (msg.link) {
+    navigateToLink(msg.link)
+  }
+}
+
+function navigateToLink(link: MessageLink) {
+  switch (link.type) {
+    case 'bond_detail':
+      router.push(`/market/${link.params.id}`)
+      break
+    case 'alert_list':
+      router.push('/alerts/history')
+      break
+    case 'market':
+      router.push('/market')
+      break
+    case 'external':
+      if (link.params.url) {
+        window.open(link.params.url, '_blank')
+      }
+      break
+  }
 }
 
 async function handleMarkAll() {
   markAllLoading.value = true
   try {
-    await alertStore.markAllRead()
+    if (activeTab.value === 'all') {
+      await messageStore.markAllRead()
+    } else {
+      await messageStore.markAllRead(activeTab.value)
+    }
     message.success('已全部标记为已读')
   } finally {
     markAllLoading.value = false
   }
 }
 
-function goToHistory() {
-  router.push('/alerts/history')
+function goToMessageCenter() {
+  router.push('/messages')
 }
 
 onMounted(() => {
-  alertStore.startPolling(30000)
+  messageStore.startPolling(30000)
 })
 
 onBeforeUnmount(() => {
-  alertStore.stopPolling()
+  messageStore.stopPolling()
 })
 </script>
 
@@ -211,11 +292,17 @@ onBeforeUnmount(() => {
   96% { transform: rotate(-10deg); }
   98% { transform: rotate(10deg); }
 }
-.alert-dropdown {
+.message-dropdown {
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
-  min-width: 360px;
+  min-width: 400px;
+  overflow: hidden;
+}
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
 }
 </style>

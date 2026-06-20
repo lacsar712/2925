@@ -152,6 +152,12 @@
           </a-menu-item>
         </a-sub-menu>
 
+        <a-menu-item key="/messages">
+          <template #icon>
+            <InboxOutlined />
+          </template>
+          消息中心
+        </a-menu-item>
         <a-sub-menu key="alerts">
           <template #icon>
             <BellOutlined />
@@ -245,6 +251,7 @@ import {
   DeleteOutlined,
   ToolOutlined,
   CalculatorOutlined,
+  InboxOutlined,
 } from '@ant-design/icons-vue'
 import { useAuthStore } from '../../stores/auth'
 import { useWatchlistStore } from '../../stores/watchlist'
