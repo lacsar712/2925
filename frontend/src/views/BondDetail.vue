@@ -119,7 +119,7 @@
                 class="text-xl font-bold tabular-nums"
                 :class="[
                   aggregated?.best_bid_price != null ? 'text-green-600' : '',
-                  getFlashClass(`${bondId.value}-best_bid`),
+                  getFlashClass(`${bondId}-best_bid`),
                 ]"
               >
                 {{ formatPrice(aggregated?.best_bid_price) }}
@@ -131,7 +131,7 @@
                 class="text-xl font-bold tabular-nums"
                 :class="[
                   aggregated?.best_ask_price != null ? 'text-red-600' : '',
-                  getFlashClass(`${bondId.value}-best_ask`),
+                  getFlashClass(`${bondId}-best_ask`),
                 ]"
               >
                 {{ formatPrice(aggregated?.best_ask_price) }}
@@ -155,7 +155,7 @@
                 class="text-lg font-semibold tabular-nums"
                 :class="[
                   'text-green-600',
-                  getFlashClass(`${bondId.value}-best_bid_yield`),
+                  getFlashClass(`${bondId}-best_bid_yield`),
                 ]"
               >
                 {{ formatYield(aggregated?.best_bid_yield) }}
@@ -167,7 +167,7 @@
                 class="text-lg font-semibold tabular-nums"
                 :class="[
                   'text-red-600',
-                  getFlashClass(`${bondId.value}-best_ask_yield`),
+                  getFlashClass(`${bondId}-best_ask_yield`),
                 ]"
               >
                 {{ formatYield(aggregated?.best_ask_yield) }}
@@ -197,7 +197,7 @@
                       class="tabular-nums"
                       :class="[
                         'text-green-600',
-                        getFlashClass(`${bondId.value}-${record.source_name}-bid`),
+                        getFlashClass(`${bondId}-${record.source_name}-bid`),
                       ]"
                     >
                       {{ formatPrice(record.best_bid_price) }}
@@ -208,7 +208,7 @@
                       class="tabular-nums"
                       :class="[
                         'text-red-600',
-                        getFlashClass(`${bondId.value}-${record.source_name}-ask`),
+                        getFlashClass(`${bondId}-${record.source_name}-ask`),
                       ]"
                     >
                       {{ formatPrice(record.best_ask_price) }}
@@ -217,7 +217,7 @@
                   <template v-else-if="column.key === 'bid_yield'">
                     <span
                       class="tabular-nums"
-                      :class="getFlashClass(`${bondId.value}-${record.source_name}-bid_yield`)"
+                      :class="getFlashClass(`${bondId}-${record.source_name}-bid_yield`)"
                     >
                       {{ formatYield(record.best_bid_yield) }}
                     </span>
@@ -225,7 +225,7 @@
                   <template v-else-if="column.key === 'ask_yield'">
                     <span
                       class="tabular-nums"
-                      :class="getFlashClass(`${bondId.value}-${record.source_name}-ask_yield`)"
+                      :class="getFlashClass(`${bondId}-${record.source_name}-ask_yield`)"
                     >
                       {{ formatYield(record.best_ask_yield) }}
                     </span>
@@ -425,6 +425,7 @@ import {
   formatVolume,
   formatAmount,
   formatDateTime,
+  formatTime,
   sourceTypeLabel,
 } from '../utils/format'
 import { useAlertStore, type AlertRule, type AlertRuleCreate } from '../stores/alert'

@@ -124,13 +124,13 @@
                   {{ formatTerm(item.remaining_term) }}
                 </span>
                 <span v-else-if="row.key === 'coupon_rate' || row.key === 'best_bid_yield' || row.key === 'best_ask_yield' || row.key === 'latest_trade_yield'">
-                  {{ formatPercent(getValue(row.key, item)) }}
+                  {{ formatPercent(getNumericValue(row.key, item)) }}
                 </span>
                 <span v-else-if="row.key === 'volume_7d'">
                   {{ formatVolume(item.volume_7d) }}
                 </span>
                 <span v-else>
-                  {{ formatPrice(getValue(row.key, item)) }}
+                  {{ formatPrice(getNumericValue(row.key, item)) }}
                 </span>
                 <span v-if="shouldShowIndicator(row.key, item)" class="ml-1">
                   <ArrowUpOutlined v-if="isBest(row.key, item, 'higher')" class="text-green-500" />
@@ -257,6 +257,12 @@ function formatTerm(val: number | null | undefined): string {
 
 function getValue(key: string, item: BondCompareData): number | string | undefined {
   return (item as any)[key]
+}
+
+function getNumericValue(key: string, item: BondCompareData): number | null | undefined {
+  const val = getValue(key, item)
+  if (val == null) return undefined
+  return typeof val === 'number' ? val : Number(val)
 }
 
 function getBestValues(key: string, type: 'higher' | 'lower'): number[] {

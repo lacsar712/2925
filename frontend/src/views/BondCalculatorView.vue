@@ -247,7 +247,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
 import { message } from 'ant-design-vue'
-import type { FormInstance, Rule } from 'ant-design-vue'
+import type { FormInstance } from 'ant-design-vue'
+import type { RuleObject } from 'ant-design-vue/es/form/interface'
 import dayjs from 'dayjs'
 import {
   CalculatorOutlined,
@@ -302,7 +303,7 @@ const formData = reactive({
   yield_rate: 3 as number | null,
 })
 
-const rules: Record<string, Rule[]> = {
+const rules = computed<Record<string, RuleObject[]>>(() => ({
   face_value: [
     { required: true, message: '请输入面值', trigger: 'blur' },
     { type: 'number', min: 0.01, message: '面值必须大于0', trigger: 'blur' },
@@ -322,7 +323,7 @@ const rules: Record<string, Rule[]> = {
   ],
   clean_price: [
     {
-      required: computed(() => calcMode.value === 'price'),
+      required: calcMode.value === 'price',
       message: '请输入净价',
       trigger: 'blur',
     },
@@ -330,13 +331,13 @@ const rules: Record<string, Rule[]> = {
   ],
   yield_rate: [
     {
-      required: computed(() => calcMode.value === 'yield'),
+      required: calcMode.value === 'yield',
       message: '请输入收益率',
       trigger: 'blur',
     },
     { type: 'number', min: -99, message: '收益率不能小于-99%', trigger: 'blur' },
   ],
-}
+}))
 
 function disabledSettlementDate(current: dayjs.Dayjs) {
   if (!current) return false

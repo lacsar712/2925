@@ -109,7 +109,7 @@
                 <a-button
                   type="text"
                   size="small"
-                  :disabled="index === (currentGroup?.bonds.length - 1)"
+                  :disabled="index === ((currentGroup?.bonds?.length ?? 0) - 1)"
                   @click="moveBond(index, 1)"
                 >
                   <template #icon><DownOutlined /></template>
@@ -118,7 +118,7 @@
             </template>
             <template v-else-if="column.key === 'code'">
               <router-link
-                :to="`/market/${record.id}"
+                :to="`/market/${record.id}`"
                 class="text-blue-600 hover:underline tabular-nums"
               >
                 {{ record.code }}
@@ -126,7 +126,7 @@
             </template>
             <template v-else-if="column.key === 'name'">
               <router-link
-                :to="`/market/${record.id}"
+                :to="`/market/${record.id}`"
                 class="text-blue-600 hover:underline"
               >
                 {{ record.name }}
@@ -138,7 +138,7 @@
               </a-tag>
             </template>
             <template v-else-if="column.key === 'coupon_rate'">
-              <span class="tabular-nums">{{ record.coupon_rate != null ? `${record.coupon_rate.toFixed(4) + '%' : '--' }}</span>
+              <span class="tabular-nums">{{ record.coupon_rate != null ? `${record.coupon_rate.toFixed(4)}%` : '--' }}</span>
             </template>
             <template v-else-if="column.key === 'remaining_term'">
               <span class="tabular-nums">{{ record.remaining_term != null ? record.remaining_term.toFixed(2) : '--' }}</span>

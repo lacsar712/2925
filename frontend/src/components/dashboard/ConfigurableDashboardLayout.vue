@@ -53,7 +53,7 @@
       handle=".drag-handle-area"
       ghost-class="drag-ghost"
       chosen-class="drag-chosen"
-      animation="200"
+      :animation="200"
       class="dashboard-grid"
     >
       <template #item="{ element }">

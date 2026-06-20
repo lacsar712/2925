@@ -223,7 +223,7 @@ import {
   ReloadOutlined,
   DeleteOutlined,
   NotificationOutlined,
-  TrendingUpOutlined,
+  RiseOutlined,
   BellOutlined,
   SoundOutlined,
 } from '@ant-design/icons-vue'
@@ -271,7 +271,7 @@ const stats = computed(() => [
 
 const typeIconMap: Record<MessageType, Component> = {
   announcement: NotificationOutlined,
-  market_movement: TrendingUpOutlined,
+  market_movement: RiseOutlined,
   price_alert: BellOutlined,
   admin_broadcast: SoundOutlined,
 }

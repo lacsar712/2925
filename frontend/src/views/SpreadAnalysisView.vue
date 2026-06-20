@@ -176,7 +176,7 @@
       <template #title>
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <TrendChartOutlined class="text-green-500" />
+            <LineChartOutlined class="text-green-500" />
             <span class="text-lg font-semibold">利差走势</span>
             <a-tag class="ml-2">{{ spreadTypeLabel }}</a-tag>
           </div>
@@ -242,7 +242,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, h } from 'vue'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import { use } from 'echarts/core'
@@ -269,7 +269,6 @@ import {
   DiffOutlined,
   LineChartOutlined,
   BarChartOutlined,
-  TrendChartOutlined,
   TableOutlined,
   ReloadOutlined,
 } from '@ant-design/icons-vue'
@@ -364,15 +363,14 @@ const detailColumns = computed(() => {
   if (analysisResult.value) {
     analysisResult.value.targetStats.forEach((stats) => {
       columns.push({
-        title: (
-          <span>
-            <span
-              class="inline-block w-2 h-2 rounded-full mr-1"
-              style={{ backgroundColor: stats.color }}
-            ></span>
-            {stats.code} 利差
-          </span>
-        ),
+        title: () =>
+          h('span', [
+            h('span', {
+              class: 'inline-block w-2 h-2 rounded-full mr-1',
+              style: { backgroundColor: stats.color },
+            }),
+            `${stats.code} 利差`,
+          ]),
         key: `spread_${stats.bond_id}`,
         width: 140,
         align: 'right',
