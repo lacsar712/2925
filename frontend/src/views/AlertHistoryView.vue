@@ -161,7 +161,7 @@ async function loadTriggers(page = currentPage.value) {
   try {
     const params: Record<string, unknown> = {
       page,
-      page_size: 500,
+      page_size: 200,
     }
     if (filterRead.value !== undefined) params.is_read = filterRead.value
     if (dateRange.value && dateRange.value[0]) {

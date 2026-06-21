@@ -129,9 +129,8 @@ async def process_alerts_once():
                     rule.last_triggered_at = now
                     triggered_count += 1
 
-            await db.flush()
-
             if triggered_count > 0:
+                await db.commit()
                 logger.info(f"预警检测完成：触发 {triggered_count} 条告警")
     except Exception as e:
         logger.exception(f"预警检测服务异常：{e}")
