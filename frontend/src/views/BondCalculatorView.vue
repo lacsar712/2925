@@ -245,7 +245,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import type { FormInstance } from 'ant-design-vue'
 import type { RuleObject } from 'ant-design-vue/es/form/interface'
@@ -366,6 +366,30 @@ function handleDateChange() {
 function validateField(field: string) {
   formRef.value?.validateFields([field]).catch(() => {})
 }
+
+function clearResult() {
+  result.value = null
+}
+
+watch(calcMode, () => {
+  clearResult()
+})
+
+watch(
+  () => [
+    formData.face_value,
+    formData.coupon_rate,
+    formData.payment_frequency,
+    formData.settlement_date?.valueOf(),
+    formData.maturity_date?.valueOf(),
+    formData.clean_price,
+    formData.yield_rate,
+  ],
+  () => {
+    clearResult()
+  },
+  { deep: true }
+)
 
 async function handleCalculate() {
   try {

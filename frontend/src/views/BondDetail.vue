@@ -25,6 +25,10 @@
             >
               {{ isFavorited ? '取消收藏' : '收藏' }}
             </a-button>
+            <a-button @click="goToCalculator">
+              <template #icon><CalculatorOutlined /></template>
+              债券计算器
+            </a-button>
             <a-button
               :disabled="isInCompare"
               @click="addToCompare"
@@ -424,7 +428,7 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { FormInstance } from 'ant-design-vue'
-import { BellOutlined, BarChartOutlined } from '@ant-design/icons-vue'
+import { BellOutlined, BarChartOutlined, CalculatorOutlined } from '@ant-design/icons-vue'
 import api from '../api'
 import {
   formatPrice,
@@ -458,6 +462,10 @@ function addToCompare() {
   ids.push(bondId.value)
   localStorage.setItem('bondview_compare', ids.join(','))
   router.push({ path: '/compare', query: { bonds: ids.join(',') } })
+}
+
+function goToCalculator() {
+  router.push('/tools/bond-calculator')
 }
 
 interface Bond {
