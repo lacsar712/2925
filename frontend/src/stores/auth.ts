@@ -27,7 +27,12 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('bondview_user', JSON.stringify(res.data.user))
   }
 
-  function logout() {
+  async function logout() {
+    try {
+      await api.post('/api/auth/logout')
+    } catch {
+      // ignore error, still logout locally
+    }
     token.value = null
     user.value = null
     localStorage.removeItem('bondview_token')

@@ -2,7 +2,7 @@ from uuid import UUID
 from typing import Optional
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, Body, Request
 from sqlalchemy import select, func, delete, update, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +22,7 @@ from app.schemas.alert import (
     MarkReadRequest,
 )
 from app.api.deps import get_current_user
+from app.services.audit_service import log_audit, get_client_ip
 
 router = APIRouter(prefix="/api/alerts", tags=["价格预警"])
 
@@ -85,11 +86,13 @@ async def get_alert_rule(
 @router.post("/rules", response_model=AlertRuleOut, status_code=201)
 async def create_alert_rule(
     data: AlertRuleCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     bond_result = await db.execute(select(Bond).where(Bond.id == data.bond_id))
-    if not bond_result.scalar_one_or_none():
+    bond = bond_result.scalar_one_or_none()
+    if not bond:
         raise HTTPException(status_code=404, detail="债券不存在")
 
     existing = await db.execute(
@@ -117,6 +120,29 @@ async def create_alert_rule(
     db.add(rule)
     await db.flush()
     await db.refresh(rule)
+
+    ip = get_client_ip(request)
+    alert_type_label = "收益率" if data.alert_type == "yield" else "净价"
+    condition_label = "高于" if data.condition == "above" else "低于"
+    await log_audit(
+        user=user,
+        action_type="alert_rule_create",
+        action_target=bond.name or str(data.bond_id),
+        action_summary=f"创建预警规则：{bond.name} {alert_type_label} {condition_label} {data.threshold}",
+        detail={
+            "rule_id": str(rule.id),
+            "bond_id": str(data.bond_id),
+            "bond_name": bond.name,
+            "bond_code": bond.code,
+            "alert_type": data.alert_type,
+            "condition": data.condition,
+            "threshold": float(data.threshold),
+            "is_enabled": rule.is_enabled,
+        },
+        ip_address=ip,
+        db=db,
+    )
+
     return AlertRuleOut.model_validate(rule)
 
 
@@ -124,18 +150,30 @@ async def create_alert_rule(
 async def update_alert_rule(
     rule_id: UUID,
     data: AlertRuleUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     result = await db.execute(
-        select(PriceAlertRule).where(
+        select(PriceAlertRule, Bond)
+        .join(Bond, PriceAlertRule.bond_id == Bond.id)
+        .where(
             PriceAlertRule.id == rule_id,
             PriceAlertRule.user_id == user.id,
         )
     )
-    rule = result.scalar_one_or_none()
-    if not rule:
+    row = result.one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="预警规则不存在")
+
+    rule, bond = row
+    old_values = {
+        "alert_type": rule.alert_type,
+        "condition": rule.condition,
+        "threshold": float(rule.threshold),
+        "is_enabled": rule.is_enabled,
+        "description": rule.description,
+    }
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -143,47 +181,127 @@ async def update_alert_rule(
 
     await db.flush()
     await db.refresh(rule)
+
+    ip = get_client_ip(request)
+    changes = {}
+    for k, v in update_data.items():
+        if k in old_values and old_values[k] != v:
+            if k == "threshold":
+                changes[k] = {"old": old_values[k], "new": float(v)}
+            else:
+                changes[k] = {"old": old_values[k], "new": v}
+
+    if changes:
+        alert_type_label = "收益率" if rule.alert_type == "yield" else "净价"
+        await log_audit(
+            user=user,
+            action_type="alert_rule_update",
+            action_target=bond.name or str(rule.bond_id),
+            action_summary=f"更新预警规则：{bond.name} {alert_type_label}",
+            detail={
+                "rule_id": str(rule_id),
+                "bond_id": str(rule.bond_id),
+                "bond_name": bond.name,
+                "bond_code": bond.code,
+                "changes": changes,
+            },
+            ip_address=ip,
+            db=db,
+        )
+
     return AlertRuleOut.model_validate(rule)
 
 
 @router.delete("/rules/{rule_id}")
 async def delete_alert_rule(
     rule_id: UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     result = await db.execute(
-        select(PriceAlertRule).where(
+        select(PriceAlertRule, Bond)
+        .join(Bond, PriceAlertRule.bond_id == Bond.id)
+        .where(
             PriceAlertRule.id == rule_id,
             PriceAlertRule.user_id == user.id,
         )
     )
-    rule = result.scalar_one_or_none()
-    if not rule:
+    row = result.one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="预警规则不存在")
 
+    rule, bond = row
+    alert_type_label = "收益率" if rule.alert_type == "yield" else "净价"
+    condition_label = "高于" if rule.condition == "above" else "低于"
+
     await db.delete(rule)
+
+    ip = get_client_ip(request)
+    await log_audit(
+        user=user,
+        action_type="alert_rule_delete",
+        action_target=bond.name or str(rule.bond_id),
+        action_summary=f"删除预警规则：{bond.name} {alert_type_label} {condition_label} {float(rule.threshold)}",
+        detail={
+            "rule_id": str(rule_id),
+            "bond_id": str(rule.bond_id),
+            "bond_name": bond.name,
+            "bond_code": bond.code,
+            "alert_type": rule.alert_type,
+            "condition": rule.condition,
+            "threshold": float(rule.threshold),
+        },
+        ip_address=ip,
+        db=db,
+    )
+
     return {"message": "删除成功"}
 
 
 @router.post("/rules/{rule_id}/toggle", response_model=AlertRuleToggleOut)
 async def toggle_alert_rule(
     rule_id: UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     result = await db.execute(
-        select(PriceAlertRule).where(
+        select(PriceAlertRule, Bond)
+        .join(Bond, PriceAlertRule.bond_id == Bond.id)
+        .where(
             PriceAlertRule.id == rule_id,
             PriceAlertRule.user_id == user.id,
         )
     )
-    rule = result.scalar_one_or_none()
-    if not rule:
+    row = result.one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="预警规则不存在")
 
+    rule, bond = row
+    old_enabled = rule.is_enabled
     rule.is_enabled = not rule.is_enabled
     await db.flush()
+
+    ip = get_client_ip(request)
+    action_type = "alert_rule_update"
+    action_label = "启用" if rule.is_enabled else "停用"
+    alert_type_label = "收益率" if rule.alert_type == "yield" else "净价"
+    await log_audit(
+        user=user,
+        action_type=action_type,
+        action_target=bond.name or str(rule.bond_id),
+        action_summary=f"{action_label}预警规则：{bond.name} {alert_type_label}",
+        detail={
+            "rule_id": str(rule_id),
+            "bond_id": str(rule.bond_id),
+            "bond_name": bond.name,
+            "bond_code": bond.code,
+            "is_enabled": {"old": old_enabled, "new": rule.is_enabled},
+        },
+        ip_address=ip,
+        db=db,
+    )
 
     return AlertRuleToggleOut(
         id=rule.id,

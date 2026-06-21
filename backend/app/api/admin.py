@@ -10,11 +10,12 @@ from app.database import get_db
 from app.models.bond import MarketSource
 from app.models.user import User
 from app.models.audit import AuditLog
-from app.schemas.user import UserOut
+from app.schemas.user import UserOut, UserCreate, UserUpdate
 from app.schemas.audit import AuditLogOut, AuditLogListResponse, AUDIT_ACTION_TYPES
 from app.api.deps import require_admin
 from app.services.cache_service import CacheService
 from app.services.audit_service import log_audit, get_client_ip, get_user_agent
+from passlib.context import CryptContext
 
 router = APIRouter(prefix="/api/admin", tags=["系统管理"])
 
@@ -99,6 +100,147 @@ async def update_source(
 async def get_users(db: AsyncSession = Depends(get_db), _admin=Depends(require_admin)):
     result = await db.execute(select(User).order_by(User.created_at))
     return [UserOut.model_validate(u) for u in result.scalars().all()]
+
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+@router.post("/users", response_model=UserOut, status_code=201)
+async def create_user(
+    body: UserCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    existing = await db.execute(select(User).where(User.username == body.username))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="用户名已存在")
+
+    user = User(
+        username=body.username,
+        password_hash=pwd_context.hash(body.password),
+        display_name=body.display_name,
+        role=body.role,
+        department=body.department,
+        is_active=True,
+    )
+    db.add(user)
+    await db.flush()
+    await db.refresh(user)
+
+    ip = get_client_ip(request)
+    await log_audit(
+        user=admin,
+        action_type="user_create",
+        action_target=body.username,
+        action_summary=f"创建用户：{body.username} ({body.display_name})",
+        detail={
+            "target_user_id": str(user.id),
+            "target_username": body.username,
+            "target_display_name": body.display_name,
+            "target_role": body.role,
+            "target_department": body.department,
+        },
+        ip_address=ip,
+        db=db,
+    )
+
+    return UserOut.model_validate(user)
+
+
+@router.put("/users/{user_id}", response_model=UserOut)
+async def update_user(
+    user_id: UUID,
+    body: UserUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    old_values = {
+        "display_name": user.display_name,
+        "role": user.role,
+        "department": user.department,
+        "is_active": user.is_active,
+    }
+
+    update_data = body.model_dump(exclude_unset=True)
+    changes = {}
+
+    if "password" in update_data:
+        user.password_hash = pwd_context.hash(update_data["password"])
+        changes["password"] = {"changed": True}
+        del update_data["password"]
+
+    for field, value in update_data.items():
+        if field in old_values and old_values[field] != value:
+            changes[field] = {"old": old_values[field], "new": value}
+        setattr(user, field, value)
+
+    await db.flush()
+    await db.refresh(user)
+
+    ip = get_client_ip(request)
+    if changes:
+        await log_audit(
+            user=admin,
+            action_type="user_update",
+            action_target=user.username,
+            action_summary=f"更新用户：{user.username}",
+            detail={
+                "target_user_id": str(user_id),
+                "target_username": user.username,
+                "changes": changes,
+            },
+            ip_address=ip,
+            db=db,
+        )
+
+    return UserOut.model_validate(user)
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    if user.id == admin.id:
+        raise HTTPException(status_code=400, detail="不能删除当前登录用户")
+
+    username = user.username
+    display_name = user.display_name
+
+    await db.delete(user)
+    await db.flush()
+
+    ip = get_client_ip(request)
+    await log_audit(
+        user=admin,
+        action_type="user_delete",
+        action_target=username,
+        action_summary=f"删除用户：{username} ({display_name})",
+        detail={
+            "target_user_id": str(user_id),
+            "target_username": username,
+            "target_display_name": display_name,
+            "target_role": user.role,
+        },
+        ip_address=ip,
+        db=db,
+    )
+
+    return {"message": "删除成功"}
 
 
 CACHE_SCOPES = {

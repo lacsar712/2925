@@ -36,4 +36,12 @@ class UserCreate(BaseModel):
     department: Optional[str] = None
 
 
+class UserUpdate(BaseModel):
+    display_name: Optional[str] = Field(None, min_length=1, max_length=50)
+    role: Optional[str] = None
+    department: Optional[str] = None
+    is_active: Optional[bool] = None
+    password: Optional[str] = Field(None, min_length=6, max_length=100)
+
+
 TokenResponse.model_rebuild()

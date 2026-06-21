@@ -2,7 +2,7 @@ from uuid import UUID
 from typing import List
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select, delete, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +20,7 @@ from app.schemas.watchlist import (
     WatchlistBondReorder,
 )
 from app.api.deps import get_current_user
+from app.services.audit_service import log_audit, get_client_ip
 
 router = APIRouter(prefix="/api/watchlist-groups", tags=["Watchlist分组"])
 
@@ -52,6 +53,7 @@ async def list_groups(
 @router.post("", response_model=WatchlistGroupOut)
 async def create_group(
     body: WatchlistGroupCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -67,6 +69,18 @@ async def create_group(
     group = WatchlistGroup(user_id=user.id, name=body.name.strip())
     db.add(group)
     await db.flush()
+
+    ip = get_client_ip(request)
+    await log_audit(
+        user=user,
+        action_type="watchlist_group_create",
+        action_target=group.name,
+        action_summary=f"创建分组：{group.name}",
+        detail={"group_id": str(group.id), "group_name": group.name},
+        ip_address=ip,
+        db=db,
+    )
+
     return WatchlistGroupOut(
         id=group.id,
         name=group.name,
@@ -80,6 +94,7 @@ async def create_group(
 async def update_group(
     group_id: UUID,
     body: WatchlistGroupUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -93,19 +108,38 @@ async def update_group(
     if not group:
         raise HTTPException(status_code=404, detail="分组不存在")
 
-    if body.name.strip() != group.name:
+    old_name = group.name
+    new_name = body.name.strip()
+
+    if new_name != group.name:
         duplicate = await db.execute(
             select(WatchlistGroup).where(
                 WatchlistGroup.user_id == user.id,
-                WatchlistGroup.name == body.name.strip(),
+                WatchlistGroup.name == new_name,
                 WatchlistGroup.id != group_id,
             )
         )
         if duplicate.scalar_one_or_none():
             raise HTTPException(status_code=400, detail="分组名称已存在")
-        group.name = body.name.strip()
+        group.name = new_name
 
     await db.flush()
+
+    ip = get_client_ip(request)
+    if old_name != new_name:
+        await log_audit(
+            user=user,
+            action_type="watchlist_group_update",
+            action_target=new_name,
+            action_summary=f"重命名分组：{old_name} → {new_name}",
+            detail={
+                "group_id": str(group_id),
+                "old_name": old_name,
+                "new_name": new_name,
+            },
+            ip_address=ip,
+            db=db,
+        )
 
     count_result = await db.execute(
         select(func.count(WatchlistGroupBond.id)).where(WatchlistGroupBond.group_id == group_id)
@@ -124,6 +158,7 @@ async def update_group(
 @router.delete("/{group_id}")
 async def delete_group(
     group_id: UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -137,8 +172,22 @@ async def delete_group(
     if not group:
         raise HTTPException(status_code=404, detail="分组不存在")
 
+    group_name = group.name
+
     await db.delete(group)
     await db.flush()
+
+    ip = get_client_ip(request)
+    await log_audit(
+        user=user,
+        action_type="watchlist_group_delete",
+        action_target=group_name,
+        action_summary=f"删除分组：{group_name}",
+        detail={"group_id": str(group_id), "group_name": group_name},
+        ip_address=ip,
+        db=db,
+    )
+
     return {"message": "分组已删除"}
 
 

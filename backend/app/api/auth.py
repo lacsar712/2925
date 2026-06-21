@@ -76,3 +76,25 @@ async def login(body: LoginRequest, request: Request, db: AsyncSession = Depends
 @router.get("/me", response_model=UserOut)
 async def get_me(user: User = Depends(get_current_user)):
     return UserOut.model_validate(user)
+
+
+@router.post("/logout")
+async def logout(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    ip = get_client_ip(request)
+    ua = get_user_agent(request)
+
+    await log_audit(
+        user=user,
+        action_type="user_logout",
+        action_summary=f"用户 {user.username} 登出系统",
+        detail={"username": user.username, "display_name": user.display_name},
+        ip_address=ip,
+        user_agent=ua,
+        db=db,
+    )
+
+    return {"message": "登出成功"}
