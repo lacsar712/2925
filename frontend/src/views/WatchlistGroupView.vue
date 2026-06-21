@@ -388,6 +388,8 @@ const prevPrices = new Map<string, { best_bid?: number; best_ask?: number; best_
 
 function handleQuoteUpdate(update: BondQuoteUpdate) {
   if (!currentGroup.value) return
+  const bondIds = new Set(currentGroup.value.bonds.map(b => b.id))
+  if (!bondIds.has(update.bond_id)) return
 
   const prev = prevPrices.get(update.bond_id) || {}
 

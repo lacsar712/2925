@@ -754,6 +754,7 @@ const prevPrices = new Map<string, { best_bid?: number; best_ask?: number; best_
 
 function handleQuoteUpdate(update: BondQuoteUpdate) {
   if (!aggregated.value) return
+  if (update.bond_id !== bondId.value) return
 
   const prev = prevPrices.get(update.bond_id) || {}
 
@@ -801,15 +802,33 @@ function handleQuoteUpdate(update: BondQuoteUpdate) {
   }
 }
 
-onMounted(() => {
-  if (bondId.value) {
-    wsStore.subscribeBond(bondId.value, handleQuoteUpdate)
+function subscribeCurrentBond() {
+  if (!bondId.value) return
+  wsStore.subscribeBond(bondId.value, handleQuoteUpdate)
+}
+
+function unsubscribeBond(bondIdStr: string) {
+  if (!bondIdStr) return
+  wsStore.unsubscribeBond(bondIdStr, handleQuoteUpdate)
+  prevPrices.delete(bondIdStr)
+}
+
+watch(bondId, (newId, oldId) => {
+  if (oldId && oldId !== newId) {
+    unsubscribeBond(oldId)
   }
+  if (newId && newId !== oldId) {
+    subscribeCurrentBond()
+  }
+})
+
+onMounted(() => {
+  subscribeCurrentBond()
 })
 
 onUnmounted(() => {
   if (bondId.value) {
-    wsStore.unsubscribeBond(bondId.value, handleQuoteUpdate)
+    unsubscribeBond(bondId.value)
   }
   clearAll()
   prevPrices.clear()

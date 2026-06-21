@@ -236,6 +236,9 @@ const bondsWithQuotes = computed(() => {
 const prevPrices = new Map<string, { best_bid?: number; best_ask?: number; best_bid_yield?: number; best_ask_yield?: number }>()
 
 function handleQuoteUpdate(update: BondQuoteUpdate) {
+  const bondIds = new Set(bonds.value.map(b => b.id))
+  if (!bondIds.has(update.bond_id)) return
+
   const prev = prevPrices.get(update.bond_id) || {}
 
   compareAndFlash(`${update.bond_id}-best_bid`, update.best_bid_price, prev.best_bid)

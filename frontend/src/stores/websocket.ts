@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
-export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
+export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'idle'
 
 export interface SourceSummary {
   source_name: string
@@ -36,7 +36,7 @@ interface WsMessage {
 type QuoteCallback = (update: BondQuoteUpdate) => void
 
 export const useWebSocketStore = defineStore('websocket', () => {
-  const status = ref<ConnectionStatus>('disconnected')
+  const status = ref<ConnectionStatus>('idle')
   const reconnectAttempts = ref(0)
   const maxReconnectAttempts = 10
   const reconnectDelay = 2000
@@ -44,6 +44,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
   let ws: WebSocket | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let pingTimer: ReturnType<typeof setInterval> | null = null
+  let manualDisconnect = false
+
   const subscribedBondIds = ref<Set<string>>(new Set())
   const callbacks = ref<Map<string, Set<QuoteCallback>>>(new Map())
   const lastPrices = ref<Map<string, { best_bid?: number; best_ask?: number }>>(new Map())
@@ -51,6 +53,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
   const isConnected = computed(() => status.value === 'connected')
   const isReconnecting = computed(() => status.value === 'reconnecting')
   const isDisconnected = computed(() => status.value === 'disconnected')
+  const isIdle = computed(() => status.value === 'idle')
 
   function getWsUrl(): string {
     const token = localStorage.getItem('bondview_token') || ''
@@ -63,6 +66,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
       return
     }
+
+    manualDisconnect = false
 
     if (reconnectAttempts.value === 0) {
       status.value = 'connecting'
@@ -80,6 +85,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     ws.onopen = () => {
       status.value = 'connected'
       reconnectAttempts.value = 0
+      manualDisconnect = false
       if (subscribedBondIds.value.size > 0) {
         sendSubscribe(Array.from(subscribedBondIds.value))
       }
@@ -101,29 +107,42 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
     ws.onclose = () => {
       stopPing()
-      if (status.value !== 'disconnected') {
+      if (manualDisconnect) {
+        if (subscribedBondIds.value.size === 0) {
+          status.value = 'idle'
+        }
+        ws = null
+      } else {
         scheduleReconnect()
       }
     }
   }
 
-  function disconnect() {
+  function disconnect(manual: boolean = true) {
     if (reconnectTimer) {
       clearTimeout(reconnectTimer)
       reconnectTimer = null
     }
     stopPing()
+    if (manual) {
+      manualDisconnect = true
+    }
     if (ws) {
       ws.close()
       ws = null
     }
-    status.value = 'disconnected'
+    if (manual) {
+      status.value = 'idle'
+    } else {
+      status.value = 'disconnected'
+    }
     reconnectAttempts.value = 0
   }
 
   function scheduleReconnect() {
     if (reconnectAttempts.value >= maxReconnectAttempts) {
       status.value = 'disconnected'
+      ws = null
       return
     }
     status.value = 'reconnecting'
@@ -202,7 +221,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     const wasEmpty = subscribedBondIds.value.size === 0
     subscribedBondIds.value.add(bondId)
 
-    if (wasEmpty && status.value === 'disconnected') {
+    if (wasEmpty && (status.value === 'idle' || status.value === 'disconnected')) {
       connect()
     } else if (status.value === 'connected') {
       sendSubscribe([bondId])
@@ -223,7 +242,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
 
     if (subscribedBondIds.value.size === 0) {
-      disconnect()
+      disconnect(true)
     }
   }
 
@@ -242,7 +261,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
       }
     })
 
-    if (subscribedBondIds.value.size > 0 && status.value === 'disconnected') {
+    if (subscribedBondIds.value.size > 0 && (status.value === 'idle' || status.value === 'disconnected')) {
       connect()
     } else if (status.value === 'connected' && newIds.length > 0) {
       sendSubscribe(newIds)
@@ -268,7 +287,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
 
     if (subscribedBondIds.value.size === 0) {
-      disconnect()
+      disconnect(true)
     }
   }
 
@@ -286,6 +305,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     isConnected,
     isReconnecting,
     isDisconnected,
+    isIdle,
     subscribedBondIds,
     connect,
     disconnect,

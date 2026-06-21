@@ -2,7 +2,7 @@
   <a-tooltip :title="statusText" placement="bottom">
     <div class="connection-status flex items-center gap-2 cursor-default">
       <span class="status-dot" :class="statusClass"></span>
-      <span class="status-text text-xs text-gray-500">{{ statusLabel }}</span>
+      <span class="status-text text-xs" :class="textClass">{{ statusLabel }}</span>
     </div>
   </a-tooltip>
 </template>
@@ -21,8 +21,25 @@ const statusClass = computed(() => {
     case 'reconnecting':
       return 'status-reconnecting'
     case 'disconnected':
-    default:
       return 'status-disconnected'
+    case 'idle':
+    default:
+      return 'status-idle'
+  }
+})
+
+const textClass = computed(() => {
+  switch (wsStore.status) {
+    case 'connected':
+      return 'text-green-600'
+    case 'connecting':
+    case 'reconnecting':
+      return 'text-yellow-600'
+    case 'disconnected':
+      return 'text-red-500'
+    case 'idle':
+    default:
+      return 'text-gray-400'
   }
 })
 
@@ -35,8 +52,10 @@ const statusLabel = computed(() => {
     case 'reconnecting':
       return '重连中'
     case 'disconnected':
-    default:
       return '已断开'
+    case 'idle':
+    default:
+      return '未启用'
   }
 })
 
@@ -49,8 +68,10 @@ const statusText = computed(() => {
     case 'reconnecting':
       return `连接中断，正在重连 (${wsStore.reconnectAttempts})...`
     case 'disconnected':
+      return '行情服务连接异常，请刷新页面重试'
+    case 'idle':
     default:
-      return '行情服务连接已断开，请刷新页面重试'
+      return '当前页面无需实时行情'
   }
 })
 </script>
@@ -84,6 +105,11 @@ const statusText = computed(() => {
 .status-disconnected {
   background-color: #ff4d4f;
   box-shadow: 0 0 6px rgba(255, 77, 79, 0.4);
+}
+
+.status-idle {
+  background-color: #bfbfbf;
+  box-shadow: none;
 }
 
 @keyframes pulse-green {
