@@ -319,9 +319,13 @@ function openCreateModal() {
 }
 
 async function handleCreateGroup() {
-  if (!createGroupName.value.trim()) return
+  const name = createGroupName.value.trim()
+  if (!name) {
+    message.warning('请输入分组名称')
+    return
+  }
   try {
-    const group = await watchlistStore.createGroup(createGroupName.value.trim())
+    const group = await watchlistStore.createGroup(name)
     message.success(`分组「${group.name}」创建成功`)
     createModalOpen.value = false
     router.push(`/watchlist/${group.id}`)

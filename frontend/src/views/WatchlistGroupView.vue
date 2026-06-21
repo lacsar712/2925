@@ -433,6 +433,22 @@ watch(
   }
 )
 
+watch(
+  groupId,
+  (newId, oldId) => {
+    if (newId && newId !== oldId) {
+      searchKeyword.value = ''
+      searchResults.value = []
+      unsubscribeGroupBonds()
+      prevPrices.clear()
+      clearAll()
+      watchlistStore.fetchGroupDetail(newId).then(() => {
+        subscribeGroupBonds()
+      })
+    }
+  }
+)
+
 onMounted(() => {
   if (groupId.value) {
     watchlistStore.fetchGroupDetail(groupId.value).then(() => {
