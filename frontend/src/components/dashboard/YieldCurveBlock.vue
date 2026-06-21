@@ -1,5 +1,8 @@
 <template>
   <a-card title="国债收益率曲线" class="rounded-lg h-full">
+    <template #extra>
+      <span class="text-xs text-gray-400">更新于 {{ formatTime(updatedAt) }}</span>
+    </template>
     <v-chart
       v-if="chartOption"
       :option="chartOption"
@@ -17,6 +20,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, TitleComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
+import { formatTime } from '../../utils/format'
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, TitleComponent])
 
@@ -27,6 +31,7 @@ export interface YieldPoint {
 
 const props = defineProps<{
   data: YieldPoint[]
+  updatedAt: string
 }>()
 
 const chartOption = computed(() => {

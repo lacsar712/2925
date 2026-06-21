@@ -1,6 +1,9 @@
 <template>
   <a-card class="rounded-lg stats-card" :bordered="false" :body-style="{ padding: 0 }">
-    <a-row :gutter="[16, 16]" style="padding: 16px 16px 0 16px; margin-bottom: -16px;">
+    <div class="flex justify-end px-4 pt-3">
+      <span class="text-xs text-gray-400">更新于 {{ formatTime(updatedAt) }}</span>
+    </div>
+    <a-row :gutter="[16, 16]" style="padding: 8px 16px 0 16px; margin-bottom: -16px;">
       <a-col :xs="12" :sm="8" :md="6" :lg="4" class="mb-4">
         <div class="rounded-lg bg-blue-50/80 p-4 h-full">
           <a-statistic
@@ -92,7 +95,7 @@ import {
   RiseOutlined,
   DollarOutlined,
 } from '@ant-design/icons-vue'
-import { formatVolume, formatAmount } from '../../utils/format'
+import { formatVolume, formatAmount, formatTime } from '../../utils/format'
 
 export interface StatsOverview {
   bond_count?: number
@@ -105,6 +108,7 @@ export interface StatsOverview {
 
 defineProps<{
   overview: StatsOverview | null
+  updatedAt: string
 }>()
 </script>
 

@@ -3,13 +3,13 @@
     <a-spin :spinning="loading" tip="加载中...">
       <ConfigurableDashboardLayout>
         <template #block-stats>
-          <StatsCards :overview="overview" />
+          <StatsCards :overview="overview" :updated-at="overviewUpdatedAt" />
         </template>
         <template #block-yieldCurve>
-          <YieldCurveBlock :data="yieldCurve" />
+          <YieldCurveBlock :data="yieldCurve" :updated-at="yieldCurveUpdatedAt" />
         </template>
         <template #block-hotBonds>
-          <HotBondsBlock :bonds="hotBonds" />
+          <HotBondsBlock :bonds="hotBonds" :updated-at="hotBondsUpdatedAt" />
         </template>
         <template #block-alerts>
           <AlertsBlock
@@ -19,10 +19,6 @@
           />
         </template>
       </ConfigurableDashboardLayout>
-
-      <div class="text-right mt-4">
-        <span class="text-xs text-gray-400">看板数据更新于 {{ formatTime(overviewUpdatedAt) }}</span>
-      </div>
     </a-spin>
   </div>
 </template>
@@ -50,6 +46,8 @@ const yieldCurve = ref<YieldPoint[]>([])
 const hotBonds = ref<HotBond[]>([])
 const alerts = ref<AlertItem[]>([])
 const overviewUpdatedAt = ref<string>('')
+const yieldCurveUpdatedAt = ref<string>('')
+const hotBondsUpdatedAt = ref<string>('')
 const alertsUpdatedAt = ref<string>('')
 
 async function fetchData() {
@@ -64,8 +62,10 @@ async function fetchData() {
     overview.value = overviewRes.data?.data ?? overviewRes.data
     overviewUpdatedAt.value = overviewRes.data?.updated_at ?? ''
     yieldCurve.value = Array.isArray(curveRes.data?.data) ? curveRes.data.data : (Array.isArray(curveRes.data) ? curveRes.data : [])
+    yieldCurveUpdatedAt.value = curveRes.data?.updated_at ?? ''
     const hotData = Array.isArray(hotRes.data?.data) ? hotRes.data.data : (Array.isArray(hotRes.data) ? hotRes.data : [])
     hotBonds.value = hotData.map((b: HotBond, i: number) => ({ ...b, rank: i + 1 }))
+    hotBondsUpdatedAt.value = hotRes.data?.updated_at ?? ''
     alerts.value = Array.isArray(alertsRes.data?.data) ? alertsRes.data.data : (Array.isArray(alertsRes.data) ? alertsRes.data : [])
     alertsUpdatedAt.value = alertsRes.data?.updated_at ?? ''
   } catch {

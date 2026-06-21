@@ -1,5 +1,8 @@
 <template>
   <a-card title="热门债券排行 Top 10" class="rounded-lg h-full">
+    <template #extra>
+      <span class="text-xs text-gray-400">更新于 {{ formatTime(updatedAt) }}</span>
+    </template>
     <a-table
       :data-source="bonds"
       :columns="columns"
@@ -37,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { formatVolume, formatAmount, bondTypeColor } from '../../utils/format'
+import { formatVolume, formatAmount, bondTypeColor, formatTime } from '../../utils/format'
 
 export interface HotBond {
   bond_id?: string
@@ -52,6 +55,7 @@ export interface HotBond {
 
 defineProps<{
   bonds: HotBond[]
+  updatedAt: string
 }>()
 
 const columns = [
