@@ -77,6 +77,7 @@ export const useDashboardLayoutStore = defineStore('dashboardLayout', () => {
   )
 
   function initForUser() {
+    editMode.value = false
     const saved = loadFromStorage(authStore.user?.id)
     if (saved) {
       blocks.value = saved
@@ -96,15 +97,17 @@ export const useDashboardLayoutStore = defineStore('dashboardLayout', () => {
     editMode.value = true
   }
 
-  function exitEditMode() {
+  function exitEditMode(silent = false) {
     editMode.value = false
     saveToStorage()
+    void silent
   }
 
   function toggleBlockVisibility(key: DashboardBlockKey) {
     const block = blocks.value.find(b => b.key === key)
     if (block) {
       block.visible = !block.visible
+      saveToStorage()
     }
   }
 
@@ -112,6 +115,7 @@ export const useDashboardLayoutStore = defineStore('dashboardLayout', () => {
     const block = blocks.value.find(b => b.key === key)
     if (block) {
       block.visible = visible
+      saveToStorage()
     }
   }
 
@@ -122,6 +126,7 @@ export const useDashboardLayoutStore = defineStore('dashboardLayout', () => {
         block.order = index
       }
     })
+    saveToStorage()
   }
 
   function resetToDefault() {
@@ -135,6 +140,7 @@ export const useDashboardLayoutStore = defineStore('dashboardLayout', () => {
       if (newId !== oldId) {
         if (editMode.value) {
           editMode.value = false
+          saveToStorage()
         }
       }
       initForUser()

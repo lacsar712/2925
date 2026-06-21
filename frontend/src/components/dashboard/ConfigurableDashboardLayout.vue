@@ -28,7 +28,7 @@
           v-if="layoutStore.editMode"
           size="small"
           type="primary"
-          @click="layoutStore.exitEditMode()"
+          @click="handleExitEditMode"
         >
           <template #icon><CheckOutlined /></template>
           完成编辑
@@ -167,6 +167,11 @@ function handleVisibilityChange(key: DashboardBlockKey, visible: boolean) {
   layoutStore.setBlockVisibility(key, visible)
 }
 
+function handleExitEditMode() {
+  layoutStore.exitEditMode()
+  message.success('布局偏好已保存')
+}
+
 function handleReset() {
   layoutStore.resetToDefault()
   message.success('已恢复默认布局')
@@ -177,8 +182,6 @@ watch(
   (val) => {
     if (val) {
       message.info('进入编辑模式，可拖拽排序或切换显示')
-    } else {
-      message.success('布局偏好已保存')
     }
   }
 )

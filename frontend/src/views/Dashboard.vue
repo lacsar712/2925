@@ -24,7 +24,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import api from '../api'
 import { formatVolume, formatAmount, formatTime } from '../utils/format'
 import ConfigurableDashboardLayout from '../components/dashboard/ConfigurableDashboardLayout.vue'
@@ -84,5 +84,11 @@ void formatAmount
 onMounted(() => {
   layoutStore.initForUser()
   fetchData()
+})
+
+onUnmounted(() => {
+  if (layoutStore.editMode) {
+    layoutStore.exitEditMode(true)
+  }
 })
 </script>
