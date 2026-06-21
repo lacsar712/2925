@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '../api'
+import { mockMessageService } from '../utils/messageMockService'
 
 export type MessageType = 'announcement' | 'market_movement' | 'price_alert' | 'admin_broadcast'
 
@@ -57,6 +58,19 @@ export const MESSAGE_TYPE_ICON: Record<MessageType, string> = {
   admin_broadcast: 'SoundOutlined',
 }
 
+function refreshMessagesByType(allMessages: Message[]): Record<MessageType, Message[]> {
+  const byType: Record<MessageType, Message[]> = {
+    announcement: [],
+    market_movement: [],
+    price_alert: [],
+    admin_broadcast: [],
+  }
+  allMessages.forEach((m) => {
+    byType[m.type].push(m)
+  })
+  return byType
+}
+
 export const useMessageCenterStore = defineStore('messageCenter', () => {
   const messages = ref<Message[]>([])
   const messagesByType = ref<Record<MessageType, Message[]>>({
@@ -87,12 +101,14 @@ export const useMessageCenterStore = defineStore('messageCenter', () => {
     admin_broadcast: unreadCount.value.admin_broadcast,
   }))
 
+  mockMessageService.init()
+
   async function fetchUnreadCount() {
     try {
       const res = await api.get<UnreadCountByType>('/api/messages/unread-count')
       unreadCount.value = res.data
     } catch {
-      // ignore
+      unreadCount.value = mockMessageService.getUnreadCount()
     }
   }
 
@@ -101,6 +117,8 @@ export const useMessageCenterStore = defineStore('messageCenter', () => {
     is_read?: boolean
     page?: number
     page_size?: number
+    start_time?: string
+    end_time?: string
   }) {
     loading.value = true
     try {
@@ -112,10 +130,23 @@ export const useMessageCenterStore = defineStore('messageCenter', () => {
         },
       })
       messages.value = res.data.items
+      messagesByType.value = refreshMessagesByType(res.data.items)
       total.value = res.data.total
       currentPage.value = res.data.page
       pageSize.value = res.data.page_size
       return res.data
+    } catch {
+      const mockResult = mockMessageService.getMessages({
+        page: currentPage.value,
+        page_size: pageSize.value,
+        ...params,
+      })
+      messages.value = mockResult.items
+      messagesByType.value = refreshMessagesByType(mockResult.items)
+      total.value = mockResult.total
+      currentPage.value = mockResult.page
+      pageSize.value = mockResult.page_size
+      return mockResult
     } finally {
       loading.value = false
     }
@@ -129,7 +160,9 @@ export const useMessageCenterStore = defineStore('messageCenter', () => {
       messagesByType.value[type] = res.data.items
       return res.data
     } catch {
-      return null
+      const mockResult = mockMessageService.getMessages({ type, page, page_size })
+      messagesByType.value[type] = mockResult.items
+      return mockResult
     }
   }
 
@@ -139,31 +172,36 @@ export const useMessageCenterStore = defineStore('messageCenter', () => {
         params: { limit },
       })
       messages.value = res.data
+      messagesByType.value = refreshMessagesByType(res.data)
       return res.data
     } catch {
-      return []
+      const mockResult = mockMessageService.getRecentMessages(limit)
+      messages.value = mockResult
+      messagesByType.value = refreshMessagesByType(mockResult)
+      return mockResult
     }
   }
 
   async function markMessageRead(messageId: string) {
     try {
       await api.post(`/api/messages/${messageId}/mark-read`)
-      const msg = messages.value.find((m) => m.id === messageId)
-      if (msg && !msg.is_read) {
-        msg.is_read = true
-        if (unreadCount.value[msg.type] > 0) {
-          unreadCount.value[msg.type]--
-        }
-        if (unreadCount.value.total > 0) {
-          unreadCount.value.total--
-        }
-      }
-      const typeMsg = messagesByType.value[msg?.type as MessageType]?.find((m) => m.id === messageId)
-      if (typeMsg) {
-        typeMsg.is_read = true
-      }
     } catch {
-      // ignore
+      mockMessageService.markMessageRead(messageId)
+    }
+
+    const msg = messages.value.find((m) => m.id === messageId)
+    if (msg && !msg.is_read) {
+      msg.is_read = true
+      if (unreadCount.value[msg.type] > 0) {
+        unreadCount.value[msg.type]--
+      }
+      if (unreadCount.value.total > 0) {
+        unreadCount.value.total--
+      }
+    }
+    const typeMsg = messagesByType.value[msg?.type as MessageType]?.find((m) => m.id === messageId)
+    if (typeMsg) {
+      typeMsg.is_read = true
     }
   }
 
@@ -171,34 +209,35 @@ export const useMessageCenterStore = defineStore('messageCenter', () => {
     try {
       const params = type ? { type } : {}
       await api.post('/api/messages/mark-read-all', params)
-      if (type) {
-        messages.value.forEach((m) => {
-          if (m.type === type) m.is_read = true
-        })
-        messagesByType.value[type].forEach((m) => {
-          m.is_read = true
-        })
-        unreadCount.value.total -= unreadCount.value[type]
-        unreadCount.value[type] = 0
-      } else {
-        messages.value.forEach((m) => {
-          m.is_read = true
-        })
-        Object.keys(messagesByType.value).forEach((key) => {
-          messagesByType.value[key as MessageType].forEach((m) => {
-            m.is_read = true
-          })
-        })
-        unreadCount.value = {
-          announcement: 0,
-          market_movement: 0,
-          price_alert: 0,
-          admin_broadcast: 0,
-          total: 0,
-        }
-      }
     } catch {
-      // ignore
+      mockMessageService.markAllRead(type)
+    }
+
+    if (type) {
+      messages.value.forEach((m) => {
+        if (m.type === type) m.is_read = true
+      })
+      messagesByType.value[type].forEach((m) => {
+        m.is_read = true
+      })
+      unreadCount.value.total -= unreadCount.value[type]
+      unreadCount.value[type] = 0
+    } else {
+      messages.value.forEach((m) => {
+        m.is_read = true
+      })
+      Object.keys(messagesByType.value).forEach((key) => {
+        messagesByType.value[key as MessageType].forEach((m) => {
+          m.is_read = true
+        })
+      })
+      unreadCount.value = {
+        announcement: 0,
+        market_movement: 0,
+        price_alert: 0,
+        admin_broadcast: 0,
+        total: 0,
+      }
     }
   }
 
@@ -217,33 +256,39 @@ export const useMessageCenterStore = defineStore('messageCenter', () => {
       unreadCount.value.total++
       return res.data
     } catch {
-      return null
+      const newMsg = mockMessageService.createMessage(data)
+      messages.value.unshift(newMsg)
+      messagesByType.value[data.type].unshift(newMsg)
+      unreadCount.value[data.type]++
+      unreadCount.value.total++
+      return newMsg
     }
   }
 
   async function deleteMessage(messageId: string) {
     try {
       await api.delete(`/api/messages/${messageId}`)
-      const idx = messages.value.findIndex((m) => m.id === messageId)
-      if (idx > -1) {
-        const msg = messages.value[idx]
-        if (!msg.is_read && unreadCount.value[msg.type] > 0) {
-          unreadCount.value[msg.type]--
-          if (unreadCount.value.total > 0) {
-            unreadCount.value.total--
-          }
-        }
-        messages.value.splice(idx, 1)
-      }
-      Object.keys(messagesByType.value).forEach((key) => {
-        const typeIdx = messagesByType.value[key as MessageType].findIndex((m) => m.id === messageId)
-        if (typeIdx > -1) {
-          messagesByType.value[key as MessageType].splice(typeIdx, 1)
-        }
-      })
     } catch {
-      // ignore
+      mockMessageService.deleteMessage(messageId)
     }
+
+    const idx = messages.value.findIndex((m) => m.id === messageId)
+    if (idx > -1) {
+      const msg = messages.value[idx]
+      if (!msg.is_read && unreadCount.value[msg.type] > 0) {
+        unreadCount.value[msg.type]--
+        if (unreadCount.value.total > 0) {
+          unreadCount.value.total--
+        }
+      }
+      messages.value.splice(idx, 1)
+    }
+    Object.keys(messagesByType.value).forEach((key) => {
+      const typeIdx = messagesByType.value[key as MessageType].findIndex((m) => m.id === messageId)
+      if (typeIdx > -1) {
+        messagesByType.value[key as MessageType].splice(typeIdx, 1)
+      }
+    })
   }
 
   function startPolling(intervalMs = 30000) {

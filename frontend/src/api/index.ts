@@ -14,11 +14,25 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+const SILENT_ERROR_PATHS = [
+  /^\/api\/messages/,
+]
+
+function shouldSkipErrorPopup(config: { url?: string } | undefined): boolean {
+  if (!config?.url) return false
+  return SILENT_ERROR_PATHS.some((pattern) => pattern.test(config.url))
+}
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error.response?.status
     const detail = error.response?.data?.detail
+    const skipPopup = shouldSkipErrorPopup(error.config)
+
+    if (skipPopup) {
+      return Promise.reject(error)
+    }
 
     if (status === 401) {
       localStorage.removeItem('bondview_token')
