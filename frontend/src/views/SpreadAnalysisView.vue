@@ -19,7 +19,7 @@
               :filter-option="false"
               @search="handleBenchmarkSearch"
               @select="handleBenchmarkSelect"
-              @change="handleBenchmarkClear"
+              @change="handleBenchmarkChange"
             >
               <template #option="{ value, label, bond }">
                 <div class="flex items-center justify-between">
@@ -42,6 +42,7 @@
               :dropdown-match-select-width="true"
               @search="handleTargetSearch"
               @deselect="handleTargetDeselect"
+              @change="handleTargetChange"
               style="width: 100%"
             >
               <a-select-option
@@ -541,9 +542,29 @@ function handleBenchmarkSelect(value: string, option: AutoCompleteOption) {
   benchmarkSearchText.value = option.label
 }
 
-function handleBenchmarkClear() {
-  benchmarkBond.value = null
+function handleBenchmarkChange(value: string | undefined) {
+  if (!value || value.trim() === '') {
+    benchmarkBond.value = null
+  }
   benchmarkOptions.value = []
+}
+
+function handleTargetChange(selectedIds: string[]) {
+  const prevIds = new Set(targetBondsMap.keys())
+  const currIds = new Set(selectedIds)
+  prevIds.forEach((id) => {
+    if (!currIds.has(id)) {
+      targetBondsMap.delete(id)
+    }
+  })
+  currIds.forEach((id) => {
+    if (!targetBondsMap.has(id)) {
+      const opt = targetOptions.value.find((o) => o.value === id)
+      if (opt) {
+        targetBondsMap.set(id, opt.bond)
+      }
+    }
+  })
 }
 
 async function handleTargetSearch(value: string) {
@@ -606,11 +627,27 @@ async function handleAnalyze() {
 
     message.success('分析完成')
   } catch (err: any) {
+    const status = err.response?.status
     const detail = err.response?.data?.detail
-    if (detail) {
-      message.error(detail)
+    const targets = targetBondIds.value
+      .map((id) => targetBondsMap.get(id))
+      .filter((b): b is Bond => b != null)
+
+    if (benchmarkBond.value && targets.length > 0) {
+      if (detail) {
+        message.warning(`${detail}，使用模拟数据展示`)
+      } else if (status === 404) {
+        message.warning('接口暂未上线，使用模拟数据展示')
+      } else {
+        message.info('网络异常，使用模拟数据展示')
+      }
+      analysisResult.value = generateMockAnalysisData(benchmarkBond.value, targets)
+    } else {
+      if (detail) {
+        message.error(detail)
+      }
+      analysisResult.value = null
     }
-    analysisResult.value = null
   } finally {
     loading.value = false
   }
