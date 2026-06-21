@@ -357,8 +357,10 @@ function updateURL() {
       path: '/compare',
       query: { bonds: compareList.value.join(',') },
     })
+    localStorage.setItem('bondview_compare', compareList.value.join(','))
   } else {
     router.replace({ path: '/compare' })
+    localStorage.removeItem('bondview_compare')
   }
 }
 
@@ -395,13 +397,14 @@ async function handleSearch() {
   }
   searchLoading.value = true
   try {
-    const res = await api.get<{ items: Bond[] }>('/api/bonds', {
+    const res = await api.get('/api/bonds', {
       params: {
         keyword: searchKeyword.value,
         page_size: 10,
       },
     })
-    searchResults.value = res.data.items ?? []
+    const payload = res.data?.data ?? res.data
+    searchResults.value = payload?.items ?? []
   } catch {
     searchResults.value = []
   } finally {
@@ -416,10 +419,11 @@ async function fetchCompareData() {
   }
   loading.value = true
   try {
-    const res = await api.get<{ items: BondCompareData[] }>('/api/bonds/compare/batch', {
+    const res = await api.get('/api/bonds/compare/batch', {
       params: { bond_ids: compareList.value.join(',') },
     })
-    compareDataList.value = res.data.items ?? []
+    const payload = res.data?.data ?? res.data
+    compareDataList.value = payload?.items ?? []
     const validIds = compareDataList.value.map(d => d.id)
     const invalidIds = compareList.value.filter(id => !validIds.includes(id))
     if (invalidIds.length > 0) {

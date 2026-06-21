@@ -25,6 +25,13 @@
             >
               {{ isFavorited ? '取消收藏' : '收藏' }}
             </a-button>
+            <a-button
+              :disabled="isInCompare"
+              @click="addToCompare"
+            >
+              <template #icon><BarChartOutlined /></template>
+              {{ isInCompare ? '已加入对比' : '加入对比' }}
+            </a-button>
           </div>
         </div>
 
@@ -414,10 +421,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { FormInstance } from 'ant-design-vue'
-import { BellOutlined } from '@ant-design/icons-vue'
+import { BellOutlined, BarChartOutlined } from '@ant-design/icons-vue'
 import api from '../api'
 import {
   formatPrice,
@@ -433,10 +440,25 @@ import { useWebSocketStore, type BondQuoteUpdate } from '../stores/websocket'
 import { usePriceFlash } from '../composables/usePriceFlash'
 
 const route = useRoute()
+const router = useRouter()
 const alertStore = useAlertStore()
 const wsStore = useWebSocketStore()
 const { compareAndFlash, getFlashClass, clearAll } = usePriceFlash()
 const bondId = computed(() => route.params.id as string)
+
+const isInCompare = computed(() => {
+  const stored = localStorage.getItem('bondview_compare') || ''
+  return stored.split(',').filter(Boolean).includes(bondId.value)
+})
+
+function addToCompare() {
+  if (!bondId.value || isInCompare.value) return
+  const stored = localStorage.getItem('bondview_compare') || ''
+  const ids = stored ? stored.split(',').filter(Boolean) : []
+  ids.push(bondId.value)
+  localStorage.setItem('bondview_compare', ids.join(','))
+  router.push({ path: '/compare', query: { bonds: ids.join(',') } })
+}
 
 interface Bond {
   id: string
