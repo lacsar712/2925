@@ -105,7 +105,8 @@
 import { ref, reactive, onMounted } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
-import type { FormInstance, FormRules } from 'ant-design-vue'
+import type { FormInstance } from 'ant-design-vue'
+import type { RuleObject } from 'ant-design-vue/es/form/interface'
 import api from '../../api'
 import { formatDateTime } from '../../utils/format'
 
@@ -136,7 +137,7 @@ const formData = reactive({
   is_active: true,
 })
 
-const rules: FormRules = {
+const rules: Record<string, RuleObject[]> = {
   username: [{ required: true, message: '请输入用户名', min: 2, max: 50 }],
   password: [
     {

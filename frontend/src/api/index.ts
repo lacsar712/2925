@@ -19,8 +19,9 @@ const SILENT_ERROR_PATHS = [
 ]
 
 function shouldSkipErrorPopup(config: { url?: string } | undefined): boolean {
-  if (!config?.url) return false
-  return SILENT_ERROR_PATHS.some((pattern) => pattern.test(config.url))
+  const url = config?.url
+  if (!url) return false
+  return SILENT_ERROR_PATHS.some((pattern) => pattern.test(url))
 }
 
 api.interceptors.response.use(

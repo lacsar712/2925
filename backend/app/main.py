@@ -9,7 +9,7 @@ import sys
 from app.config import settings
 from app.database import init_db, async_session
 from app.seed.seed_data import seed_all
-from app.api import auth, bonds, quotes, trades, futures, swaps, dashboard, favorites, admin, alerts, watchlist_groups, websocket
+from app.api import auth, bonds, quotes, trades, futures, swaps, dashboard, favorites, admin, alerts, watchlist_groups, websocket, messages
 from app.services.alert_service import alert_monitor_loop
 from app.services.websocket_service import quote_broadcast_loop
 from app.services.cache_service import CacheService
@@ -79,6 +79,7 @@ app.include_router(favorites.router)
 app.include_router(admin.router)
 app.include_router(alerts.router)
 app.include_router(watchlist_groups.router)
+app.include_router(messages.router)
 app.include_router(websocket.router)
 
 

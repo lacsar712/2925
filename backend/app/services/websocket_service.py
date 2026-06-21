@@ -6,6 +6,7 @@ from typing import Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
 from loguru import logger
+from starlette.websockets import WebSocketState
 from sqlalchemy import select, func
 
 from app.database import async_session
@@ -65,22 +66,37 @@ class ConnectionManager:
     async def broadcast_bond_update(self, bond_id: str, message: dict):
         async with self._lock:
             connections = list(self.subscriptions.get(bond_id, set()))
-            for conn_id in connections:
-                ws = self.active_connections.get(conn_id)
-                if ws:
-                    try:
-                        await ws.send_json(message)
-                    except Exception as e:
-                        logger.warning(f"发送消息失败 {conn_id}: {e}")
+            targets = [
+                (conn_id, self.active_connections.get(conn_id))
+                for conn_id in connections
+            ]
 
-    async def send_personal(self, conn_id: str, message: dict):
-        async with self._lock:
-            ws = self.active_connections.get(conn_id)
-        if ws:
+        dead_connections: list[str] = []
+        for conn_id, ws in targets:
+            if not ws:
+                dead_connections.append(conn_id)
+                continue
             try:
                 await ws.send_json(message)
             except Exception as e:
                 logger.warning(f"发送消息失败 {conn_id}: {e}")
+                dead_connections.append(conn_id)
+
+        for conn_id in dead_connections:
+            await self.disconnect(conn_id)
+
+    async def send_personal(self, conn_id: str, message: dict) -> bool:
+        async with self._lock:
+            ws = self.active_connections.get(conn_id)
+        if not ws or ws.client_state != WebSocketState.CONNECTED:
+            return False
+        try:
+            await ws.send_json(message)
+            return True
+        except Exception as e:
+            logger.warning(f"发送消息失败 {conn_id}: {e}")
+            await self.disconnect(conn_id)
+            return False
 
     @property
     def subscribed_bond_ids(self) -> set[str]:
@@ -88,6 +104,21 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+def _is_fatal_ws_error(exc: Exception) -> bool:
+    if isinstance(exc, WebSocketDisconnect):
+        return True
+    msg = str(exc).lower()
+    return any(
+        hint in msg
+        for hint in (
+            "not connected",
+            'need to call "accept"',
+            "close message has been sent",
+            "disconnect message has been received",
+        )
+    )
 
 
 async def get_bond_aggregated_quote(bond_id: uuid.UUID) -> Optional[dict]:
@@ -228,15 +259,20 @@ async def handle_websocket(websocket: WebSocket):
             except WebSocketDisconnect:
                 break
             except json.JSONDecodeError:
-                await manager.send_personal(conn_id, {
+                if not await manager.send_personal(conn_id, {
                     "type": "error",
                     "data": {"message": "无效的 JSON 格式"},
-                })
+                }):
+                    break
             except Exception as e:
+                if _is_fatal_ws_error(e):
+                    logger.debug(f"WebSocket 连接已断开: {conn_id}")
+                    break
                 logger.error(f"处理 WebSocket 消息错误: {e}")
-                await manager.send_personal(conn_id, {
+                if not await manager.send_personal(conn_id, {
                     "type": "error",
                     "data": {"message": str(e)},
-                })
+                }):
+                    break
     finally:
         await manager.disconnect(conn_id)

@@ -81,6 +81,68 @@ async def list_bonds(
     )
 
 
+@router.get("/quotes/batch")
+async def get_bonds_quotes_batch(
+    bond_ids: str = Query(..., description="债券ID列表，逗号分隔"),
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(get_current_user),
+):
+    """批量获取债券最优报价摘要，供聚合行情列表使用"""
+    id_list = [UUID(id_str.strip()) for id_str in bond_ids.split(",") if id_str.strip()]
+    if len(id_list) == 0:
+        raise HTTPException(status_code=400, detail="请提供至少一个债券ID")
+    if len(id_list) > 100:
+        raise HTTPException(status_code=400, detail="最多支持100只债券")
+
+    cache_key_suffix = "_".join(sorted([str(i) for i in id_list]))
+
+    async def _fetch():
+        result = []
+        for bond_id in id_list:
+            bond_result = await db.execute(select(Bond).where(Bond.id == bond_id))
+            bond = bond_result.scalar_one_or_none()
+            if not bond:
+                continue
+
+            quotes_result = await db.execute(
+                select(
+                    func.max(Quote.bid_price).label("best_bid"),
+                    func.min(Quote.ask_price).label("best_ask"),
+                    func.max(Quote.bid_yield).label("best_bid_yield"),
+                    func.min(Quote.ask_yield).label("best_ask_yield"),
+                    func.count(Quote.id).label("quote_count"),
+                )
+                .where(Quote.bond_id == bond_id)
+            )
+            quote_row = quotes_result.first()
+
+            best_bid = float(quote_row.best_bid) if quote_row and quote_row.best_bid else None
+            best_ask = float(quote_row.best_ask) if quote_row and quote_row.best_ask else None
+            best_bid_yield = float(quote_row.best_bid_yield) if quote_row and quote_row.best_bid_yield else None
+            best_ask_yield = float(quote_row.best_ask_yield) if quote_row and quote_row.best_ask_yield else None
+
+            spread = None
+            if best_ask and best_bid:
+                spread = round(best_ask - best_bid, 4)
+
+            result.append({
+                "id": str(bond.id),
+                "code": bond.code,
+                "name": bond.name,
+                "best_bid_price": best_bid,
+                "best_ask_price": best_ask,
+                "best_bid_yield": best_bid_yield,
+                "best_ask_yield": best_ask_yield,
+                "spread": spread,
+                "quote_count": quote_row.quote_count if quote_row else 0,
+            })
+
+        return {"items": result}
+
+    cache_key = f"bonds:quotes_batch:{cache_key_suffix}"
+    return await _cached_or_fetch(cache_key, "bonds", _fetch)
+
+
 @router.get("/{bond_id}", response_model=BondOut)
 async def get_bond(bond_id: UUID, db: AsyncSession = Depends(get_db), _user=Depends(get_current_user)):
     result = await db.execute(select(Bond).where(Bond.id == bond_id))

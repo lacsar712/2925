@@ -13,6 +13,7 @@ from app.models.trade import Trade
 from app.models.futures import FuturesQuote
 from app.models.swap import SwapQuote
 from app.models.user import User
+from app.models.message import Message
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -21,6 +22,7 @@ async def seed_all(db: AsyncSession):
     existing = await db.execute(select(User).limit(1))
     if existing.scalar_one_or_none():
         logger.info("数据库已有数据，跳过种子填充")
+        await seed_messages_if_empty(db)
         return
 
     logger.info("开始填充种子数据...")
@@ -34,10 +36,84 @@ async def seed_all(db: AsyncSession):
     await seed_trades(db, bonds, sources)
     await seed_futures(db)
     await seed_swaps(db, bonds)
+    await seed_messages(db, users, bonds)
     await db.flush()
     await db.commit()
 
     logger.info("种子数据填充完成")
+
+
+async def seed_messages_if_empty(db: AsyncSession):
+    existing = await db.execute(select(Message).limit(1))
+    if existing.scalar_one_or_none():
+        return
+    users_result = await db.execute(select(User))
+    users = list(users_result.scalars().all())
+    bonds_result = await db.execute(select(Bond).limit(3))
+    bonds = list(bonds_result.scalars().all())
+    if not users:
+        return
+    await seed_messages(db, users, bonds)
+    await db.commit()
+    logger.info("消息中心种子数据填充完成")
+
+
+async def seed_messages(db: AsyncSession, users: list[User], bonds: list[Bond]):
+    now = datetime.now()
+    sample_bond = bonds[0] if bonds else None
+    bond_id_str = str(sample_bond.id) if sample_bond else ""
+    bond_code = sample_bond.code if sample_bond else "240001.IB"
+    bond_name = sample_bond.name if sample_bond else "24国债01"
+
+    templates = [
+        {
+            "type": "announcement",
+            "title": "系统维护通知",
+            "content": "系统将于本周六凌晨 2:00-4:00 进行例行维护，届时行情查询和预警功能可能短暂不可用。",
+            "is_read": False,
+            "metadata": {"priority": "high", "category": "maintenance"},
+            "created_at": now - timedelta(hours=2),
+        },
+        {
+            "type": "admin_broadcast",
+            "title": "新功能上线：债券对比分析",
+            "content": "债券对比分析功能已正式上线，支持最多 4 只债券的多维度对比。",
+            "is_read": False,
+            "metadata": {"feature": "bond_compare"},
+            "created_at": now - timedelta(hours=5),
+        },
+        {
+            "type": "price_alert",
+            "title": f"价格预警：{bond_name} 收益率高于阈值",
+            "content": f"{bond_name}（代码：{bond_code}）当前收益率已高于您设置的阈值。",
+            "is_read": False,
+            "link": {"type": "bond_detail", "params": {"id": bond_id_str}},
+            "metadata": {"bond_code": bond_code, "bond_name": bond_name, "alert_type": "yield"},
+            "created_at": now - timedelta(minutes=15),
+        },
+        {
+            "type": "market_movement",
+            "title": f"行情异动：{bond_name} 上涨 1.85%",
+            "content": f"{bond_name}（代码：{bond_code}）价格出现大幅上涨，建议关注。",
+            "is_read": False,
+            "link": {"type": "bond_detail", "params": {"id": bond_id_str}},
+            "metadata": {"bond_code": bond_code, "change_pct": 1.85},
+            "created_at": now - timedelta(minutes=30),
+        },
+    ]
+
+    for user in users:
+        for tpl in templates:
+            db.add(Message(
+                user_id=user.id,
+                type=tpl["type"],
+                title=tpl["title"],
+                content=tpl["content"],
+                is_read=tpl["is_read"],
+                link=tpl.get("link"),
+                metadata_=tpl.get("metadata", {}),
+                created_at=tpl["created_at"],
+            ))
 
 
 async def seed_users(db: AsyncSession) -> list[User]:

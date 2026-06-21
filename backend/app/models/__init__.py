@@ -6,6 +6,7 @@ from app.models.swap import SwapQuote
 from app.models.user import User, UserFavorite, WatchlistGroup, WatchlistGroupBond
 from app.models.alert import PriceAlertRule, PriceAlertTrigger
 from app.models.audit import AuditLog
+from app.models.message import Message
 
 __all__ = [
     "Bond",
@@ -21,4 +22,5 @@ __all__ = [
     "PriceAlertRule",
     "PriceAlertTrigger",
     "AuditLog",
+    "Message",
 ]

@@ -45,6 +45,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let pingTimer: ReturnType<typeof setInterval> | null = null
   let manualDisconnect = false
+  let hasOpened = false
 
   const subscribedBondIds = ref<Set<string>>(new Set())
   const callbacks = ref<Map<string, Set<QuoteCallback>>>(new Map())
@@ -63,11 +64,23 @@ export const useWebSocketStore = defineStore('websocket', () => {
   }
 
   function connect() {
+    const token = localStorage.getItem('bondview_token')
+    if (!token) {
+      status.value = 'idle'
+      return
+    }
+
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
       return
     }
 
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+
     manualDisconnect = false
+    hasOpened = false
 
     if (reconnectAttempts.value === 0) {
       status.value = 'connecting'
@@ -83,6 +96,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
 
     ws.onopen = () => {
+      hasOpened = true
       status.value = 'connected'
       reconnectAttempts.value = 0
       manualDisconnect = false
@@ -107,11 +121,13 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
     ws.onclose = () => {
       stopPing()
+      ws = null
       if (manualDisconnect) {
         if (subscribedBondIds.value.size === 0) {
           status.value = 'idle'
         }
-        ws = null
+      } else if (!hasOpened) {
+        status.value = 'disconnected'
       } else {
         scheduleReconnect()
       }
@@ -218,12 +234,13 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
     callbacks.value.get(bondId)!.add(callback)
 
+    const alreadySubscribed = subscribedBondIds.value.has(bondId)
     const wasEmpty = subscribedBondIds.value.size === 0
     subscribedBondIds.value.add(bondId)
 
     if (wasEmpty && (status.value === 'idle' || status.value === 'disconnected')) {
       connect()
-    } else if (status.value === 'connected') {
+    } else if (!alreadySubscribed && status.value === 'connected') {
       sendSubscribe([bondId])
     }
   }
